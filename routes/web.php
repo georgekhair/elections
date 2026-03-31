@@ -202,6 +202,18 @@ Route::middleware(['auth', 'role:admin|operations'])
         Route::post('/admin/voters/{voter}/relationships', [VoterRelationshipController::class, 'store'])
             ->name('voters.relationships.store');
 
+        Route::put('/admin/voter-notes/{voterNote}', [VoterNoteController::class, 'update'])
+            ->name('voters.notes.update');
+
+        Route::delete('/admin/voter-notes/{voterNote}', [VoterNoteController::class, 'destroy'])
+            ->name('voters.notes.destroy');
+
+        Route::put('/admin/voter-relationships/{voterRelationship}', [VoterRelationshipController::class, 'update'])
+            ->name('voters.relationships.update');
+
+        Route::delete('/admin/voter-relationships/{voterRelationship}', [VoterRelationshipController::class, 'destroy'])
+            ->name('voters.relationships.destroy');
+
         Route::get('/voters/search-simple', [DataPreparationController::class, 'searchSimple'])
             ->name('voters.search.simple');
 

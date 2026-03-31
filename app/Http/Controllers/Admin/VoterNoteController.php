@@ -26,7 +26,20 @@ class VoterNoteController extends Controller
 
         return back()->with('success', 'Voter note added successfully.');
     }
+    public function update(Request $request, VoterNote $voterNote)
+    {
+        $validated = $request->validate([
+            'note_type' => 'required|in:general,transportation,persuasion',
+            'priority' => 'nullable|in:low,medium,high',
+            'requires_action' => 'required|boolean',
+            'content' => 'required|string|max:3000',
+            'action_due_at' => 'nullable|date',
+        ]);
 
+        $voterNote->update($validated);
+
+        return back()->with('success', 'Voter note updated successfully.');
+    }
     public function destroy(VoterNote $voterNote)
     {
         $voterNote->delete();

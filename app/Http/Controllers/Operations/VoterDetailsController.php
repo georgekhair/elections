@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Operations;
 
 use App\Http\Controllers\Controller;
 use App\Models\Voter;
+use App\Models\User;
 
 class VoterDetailsController extends Controller
 {
@@ -14,8 +15,11 @@ class VoterDetailsController extends Controller
             'voterNotes.creator',
             'actionableVoterNotes',
             'relationships.relatedVoter',
+            'relationships.creator',
         ]);
 
-        return view('operations.voters.show', compact('voter'));
+        $delegates = User::role('delegate')->orderBy('name')->get();
+
+        return view('operations.voters.show', compact('voter', 'delegates'));
     }
 }

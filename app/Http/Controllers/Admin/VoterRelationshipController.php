@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Voter;
 use Illuminate\Http\Request;
+use App\Models\VoterRelationship;
 
 class VoterRelationshipController extends Controller
 {
@@ -38,5 +39,44 @@ class VoterRelationshipController extends Controller
         $voter->relationships()->create($validated);
 
         return back()->with('success', 'Voter relationship added successfully.');
+    }
+    public function update(Request $request, VoterRelationship $voterRelationship)
+    {
+        $validated = $request->validate([
+            'related_voter_id' => 'nullable|exists:voters,id',
+            'related_name' => 'nullable|string|max:255',
+            'relationship_type' => 'required|in:spouse,son,daughter,brother,sister,father,mother,relative,friend,neighbor,influencer,other',
+            'influence_level' => 'required|in:low,medium,high',
+            'is_primary_influencer' => 'required|boolean',
+            'notes' => 'nullable|string|max:3000',
+        ]);
+
+        if (empty($validated['related_voter_id']) && empty($validated['related_name'])) {
+            return back()->withErrors([
+                'related_voter_id' => 'Choose a voter or enter a temporary related person name.',
+            ])->withInput();
+        }
+
+        if (
+            !empty($validated['related_voter_id']) &&
+            (int) $validated['related_voter_id'] === (int) $voterRelationship->voter_id
+        ) {
+            return back()->withErrors([
+                'related_voter_id' => 'A voter cannot be related to themselves.',
+            ])->withInput();
+        }
+
+        $validated['is_unconfirmed'] = empty($validated['related_voter_id']);
+
+        $voterRelationship->update($validated);
+
+        return back()->with('success', 'Voter relationship updated successfully.');
+    }
+
+    public function destroy(VoterRelationship $voterRelationship)
+    {
+        $voterRelationship->delete();
+
+        return back()->with('success', 'Voter relationship deleted successfully.');
     }
 }
