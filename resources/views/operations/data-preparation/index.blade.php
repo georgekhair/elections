@@ -5,7 +5,7 @@
 <h1>تجهيز بيانات الناخبين</h1>
 
 {{-- Active Filters --}}
-@if(request()->hasAny(['center_id', 'status', 'priority', 'delegate_id', 'unassigned']))
+@if(request()->hasAny(['center_id', 'status', 'priority', 'delegate_id', 'unassigned', 'has_notes', 'needs_action', 'high_priority_notes', 'has_relationships', 'has_influencer']))
 <div class="card" style="margin-bottom:15px;">
     <strong>الفلاتر الحالية:</strong>
 
@@ -28,6 +28,25 @@
     @if(request('unassigned'))
         <span class="badge badge-admin">غير موزعين</span>
     @endif
+    @if(request('has_notes'))
+        <span class="badge">📝 لديه ملاحظات</span>
+    @endif
+
+    @if(request('needs_action'))
+        <span class="badge">🚨 يحتاج إجراء</span>
+    @endif
+
+    @if(request('high_priority_notes'))
+        <span class="badge">🔥 ملاحظات عالية</span>
+    @endif
+
+    @if(request('has_relationships'))
+        <span class="badge">🔗 علاقات</span>
+    @endif
+
+    @if(request('has_influencer'))
+        <span class="badge">⭐ مؤثر</span>
+    @endif
 </div>
 @endif
 
@@ -36,50 +55,92 @@
 {{-- Filters --}}
 <div class="top-bar">
 
-    {{-- Quick Search --}}
-    <input type="text"
-           id="quick-search"
-           autocomplete="off"
-           placeholder="🔎 ابحث بالاسم أو الهوية..."
-           oninput="liveSearch()">
+    {{-- ===== MAIN FILTERS ===== --}}
+    <div class="filter-group">
 
-    {{-- Center --}}
-    <select name="center_id" onchange="liveSearch()">
-        <option value="">كل المراكز</option>
-        @foreach($centers as $center)
-            <option value="{{ $center->id }}" @selected(request('center_id') == $center->id)>
-                {{ $center->name }}
-            </option>
-        @endforeach
-    </select>
+        {{-- Quick Search --}}
+        <input type="text"
+               id="quick-search"
+               autocomplete="off"
+               placeholder="🔎 ابحث بالاسم أو الهوية..."
+               oninput="liveSearch()">
 
-    {{-- Status --}}
-    <select name="status" onchange="liveSearch()">
-        <option value="">كل الحالات</option>
-        <option value="supporter" @selected(request('status') == 'supporter')>مضمون</option>
-        <option value="leaning" @selected(request('status') == 'leaning')>يميل</option>
-        <option value="undecided" @selected(request('status') == 'undecided')>متردد</option>
-        <option value="opposed" @selected(request('status') == 'opposed')>ضد</option>
-        <option value="unknown" @selected(request('status') == 'unknown')>غير معروف</option>
-    </select>
+        {{-- Center --}}
+        <select name="center_id" onchange="liveSearch()">
+            <option value="">كل المراكز</option>
+            @foreach($centers as $center)
+                <option value="{{ $center->id }}" @selected(request('center_id') == $center->id)>
+                    {{ $center->name }}
+                </option>
+            @endforeach
+        </select>
 
-    {{-- Priority --}}
-    <select name="priority" onchange="liveSearch()">
-        <option value="">كل الأولويات</option>
-        <option value="high" @selected(request('priority') == 'high')>عالي</option>
-        <option value="medium" @selected(request('priority') == 'medium')>متوسط</option>
-        <option value="low" @selected(request('priority') == 'low')>منخفض</option>
-    </select>
+        {{-- Status --}}
+        <select name="status" onchange="liveSearch()">
+            <option value="">كل الحالات</option>
+            <option value="supporter" @selected(request('status') == 'supporter')>مضمون</option>
+            <option value="leaning" @selected(request('status') == 'leaning')>يميل</option>
+            <option value="undecided" @selected(request('status') == 'undecided')>متردد</option>
+            <option value="opposed" @selected(request('status') == 'opposed')>ضد</option>
+            <option value="unknown" @selected(request('status') == 'unknown')>غير معروف</option>
+        </select>
 
-    {{-- Delegates (المندوبين) --}}
-    <select name="delegate_id" onchange="liveSearch()">
-        <option value="">كل المندوبين</option>
-        @foreach($delegates as $d)
-            <option value="{{ $d->id }}" @selected(request('delegate_id') == $d->id)>
-                {{ $d->name }}
-            </option>
-        @endforeach
-    </select>
+        {{-- Priority --}}
+        <select name="priority" onchange="liveSearch()">
+            <option value="">كل الأولويات</option>
+            <option value="high" @selected(request('priority') == 'high')>عالي</option>
+            <option value="medium" @selected(request('priority') == 'medium')>متوسط</option>
+            <option value="low" @selected(request('priority') == 'low')>منخفض</option>
+        </select>
+
+        {{-- Delegates --}}
+        <select name="delegate_id" onchange="liveSearch()">
+            <option value="">كل المندوبين</option>
+            @foreach($delegates as $d)
+                <option value="{{ $d->id }}" @selected(request('delegate_id') == $d->id)>
+                    {{ $d->name }}
+                </option>
+            @endforeach
+        </select>
+
+    </div>
+
+    {{-- ===== ADVANCED FILTERS ===== --}}
+    <div class="advanced-filters">
+
+        <div class="filter-title">🔎 فلاتر متقدمة</div>
+
+        <label>
+            <input type="checkbox" name="has_notes" onchange="liveSearch()"
+                @checked(request('has_notes'))>
+            📝 لديه ملاحظات
+        </label>
+
+        <label>
+            <input type="checkbox" name="needs_action" onchange="liveSearch()"
+                @checked(request('needs_action'))>
+            🚨 يحتاج إجراء
+        </label>
+
+        <label>
+            <input type="checkbox" name="high_priority_notes" onchange="liveSearch()"
+                @checked(request('high_priority_notes'))>
+            🔥 ملاحظات عالية
+        </label>
+
+        <label>
+            <input type="checkbox" name="has_relationships" onchange="liveSearch()"
+                @checked(request('has_relationships'))>
+            🔗 لديه علاقات
+        </label>
+
+        <label>
+            <input type="checkbox" name="has_influencer" onchange="liveSearch()"
+                @checked(request('has_influencer'))>
+            ⭐ مؤثر أساسي
+        </label>
+
+    </div>
 
 </div>
 
@@ -220,6 +281,7 @@
             <th>الحالة</th>
             <th>الأولوية</th>
             <th>المندوب</th>
+            <th>مؤشرات</th>
         </tr>
     </thead>
 
@@ -411,7 +473,12 @@ document.addEventListener('DOMContentLoaded', function () {
             status: document.querySelector('[name="status"]')?.value || '',
             priority: document.querySelector('[name="priority"]')?.value || '',
             delegate_id: document.querySelector('[name="delegate_id"]')?.value || '',
-            name: document.getElementById('quick-search')?.value || ''
+            name: document.getElementById('quick-search')?.value || '',
+            has_notes: document.querySelector('[name="has_notes"]')?.checked ? 1 : '',
+            needs_action: document.querySelector('[name="needs_action"]')?.checked ? 1 : '',
+            high_priority_notes: document.querySelector('[name="high_priority_notes"]')?.checked ? 1 : '',
+            has_relationships: document.querySelector('[name="has_relationships"]')?.checked ? 1 : '',
+            has_influencer: document.querySelector('[name="has_influencer"]')?.checked ? 1 : '',
         };
 
         fetch("{{ route('operations.data-preparation.bulk-assign') }}", {
@@ -445,7 +512,12 @@ document.addEventListener('DOMContentLoaded', function () {
             status: document.querySelector('[name="status"]')?.value || '',
             priority: document.querySelector('[name="priority"]')?.value || '',
             delegate_id: document.querySelector('[name="delegate_id"]')?.value || '',
-            name: document.getElementById('quick-search')?.value || ''
+            name: document.getElementById('quick-search')?.value || '',
+            has_notes: document.querySelector('[name="has_notes"]')?.checked ? 1 : '',
+            needs_action: document.querySelector('[name="needs_action"]')?.checked ? 1 : '',
+            high_priority_notes: document.querySelector('[name="high_priority_notes"]')?.checked ? 1 : '',
+            has_relationships: document.querySelector('[name="has_relationships"]')?.checked ? 1 : '',
+            has_influencer: document.querySelector('[name="has_influencer"]')?.checked ? 1 : '',
         };
 
         fetch("{{ route('operations.data-preparation.bulk-status') }}", {
@@ -474,22 +546,40 @@ document.addEventListener('DOMContentLoaded', function () {
             const status = document.querySelector('[name="status"]')?.value;
             const priority = document.querySelector('[name="priority"]')?.value;
             const delegateId = document.querySelector('[name="delegate_id"]')?.value;
+            const hasNotes = document.querySelector('[name="has_notes"]')?.checked;
+            const needsAction = document.querySelector('[name="needs_action"]')?.checked;
+            const highPriorityNotes = document.querySelector('[name="high_priority_notes"]')?.checked;
+            const hasRelationships = document.querySelector('[name="has_relationships"]')?.checked;
+            const hasInfluencer = document.querySelector('[name="has_influencer"]')?.checked;
 
             if (name) params.append('name', name);
             if (center) params.append('center_id', center);
             if (status) params.append('status', status);
             if (priority) params.append('priority', priority);
             if (delegateId) params.append('delegate_id', delegateId);
+            if (hasNotes) params.append('has_notes', 1);
+            if (needsAction) params.append('needs_action', 1);
+            if (highPriorityNotes) params.append('high_priority_notes', 1);
+            if (hasRelationships) params.append('has_relationships', 1);
+            if (hasInfluencer) params.append('has_influencer', 1);
 
             fetch(`/operations/data-preparation/search?${params.toString()}`)
                 .then(res => res.json())
                 .then(data => {
+
+                    if (data.error) {
+                        console.error(data.message);
+                        return;
+                    }
+
                     document.getElementById('voters-table').innerHTML = data.html;
                     updateTotals(data.totals);
 
-                    // reset bulk state after refresh
                     selectAllFilteredMode = false;
                     updateBulkBar();
+                })
+                .catch(err => {
+                    console.error('Search error:', err);
                 });
 
         }, 400);
@@ -702,6 +792,46 @@ document.addEventListener('DOMContentLoaded', function () {
             if (btn) btn.innerText = '❌';
         });
     };
+
+    function updateTotals(totals) {
+
+        if (!totals) return;
+
+        const box = document.getElementById('totals-box');
+        if (!box) return;
+
+        box.innerHTML = `
+            <div class="total-card">
+                <div class="label">إجمالي</div>
+                <div class="value">${totals.total ?? 0}</div>
+            </div>
+
+            <div class="total-card green">
+                <div class="label">مضمون</div>
+                <div class="value">${totals.supporter ?? 0}</div>
+            </div>
+
+            <div class="total-card blue">
+                <div class="label">يميل</div>
+                <div class="value">${totals.leaning ?? 0}</div>
+            </div>
+
+            <div class="total-card yellow">
+                <div class="label">متردد</div>
+                <div class="value">${totals.undecided ?? 0}</div>
+            </div>
+
+            <div class="total-card red">
+                <div class="label">ضد</div>
+                <div class="value">${totals.opposed ?? 0}</div>
+            </div>
+
+            <div class="total-card gray">
+                <div class="label">غير معروف</div>
+                <div class="value">${totals.unknown ?? 0}</div>
+            </div>
+        `;
+    }
 
 });
 </script>
@@ -1000,6 +1130,45 @@ kbd{
 .bulk-bar select,
 .bulk-bar input {
     margin-bottom: 0 !important;
+}
+.filter-group {
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    width:100%;
+}
+
+.advanced-filters {
+    width:100%;
+    margin-top:10px;
+    padding-top:10px;
+    border-top:1px solid #eee;
+
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    align-items:center;
+}
+
+.filter-title {
+    font-weight:600;
+    color:#374151;
+    margin-right:10px;
+}
+
+.advanced-filters label {
+    display:flex;
+    align-items:center;
+    gap:4px;
+    background:#f9fafb;
+    padding:5px 10px;
+    border-radius:8px;
+    font-size:13px;
+    cursor:pointer;
+}
+
+.advanced-filters label:hover {
+    background:#eef2ff;
 }
 </style>
 

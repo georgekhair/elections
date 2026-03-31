@@ -115,93 +115,138 @@
         </div>
     @endif
     <div class="card">
-        <div class="card-header">Relationships</div>
+    <div class="card-header">Relationships</div>
 
-        <div class="card-body">
+    <div class="card-body">
 
-            <form method="POST" action="{{ route('voters.relationships.store', $voter) }}">
-                @csrf
+        @if(session('success'))
+            <div class="alert alert-success">
+                {{ session('success') }}
+            </div>
+        @endif
 
-                <div class="row">
+        @if($errors->any())
+            <div class="alert alert-danger">
+                <ul class="mb-0">
+                    @foreach($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
 
-                    <div class="col-md-4">
-                        <input type="text"
-                            id="voter-search"
-                            class="form-control"
-                            placeholder="🔎 ابحث عن ناخب بالاسم...">
+        <form method="POST" action="{{ route('voters.relationships.store', $voter) }}">
+            @csrf
 
-                        <input type="hidden" name="related_voter_id" id="selected-voter-id">
-                        <div class="col-md-4 mt-2">
-                        <input type="text"
-                            name="related_name"
-                            class="form-control"
-                            placeholder="If unknown, write something like: Wife / Son / Relative">
-                        <small class="text-muted">
-                            Use this only if the related voter is not identified yet.
-                        </small>
-                    </div>
-                        <div id="search-results" class="search-results"></div>
-                    </div>
+            <div class="row">
 
-                    <div class="col-md-3">
-                        <select name="relationship_type" class="form-control">
-                            <option value="spouse">Spouse</option>
-                            <option value="friend">Friend</option>
-                            <option value="relative">Relative</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <select name="is_primary_influencer" class="form-control">
-                            <option value="1">Primary Influencer</option>
-                            <option value="0" selected>Secondary</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <select name="influence_level" class="form-control">
-                            <option value="low">Low</option>
-                            <option value="medium">Medium</option>
-                            <option value="high">High</option>
-                        </select>
-                    </div>
+                <div class="col-md-4 mb-3 position-relative">
+                    <label class="form-label">Search existing voter</label>
 
-                    <div class="col-md-3">
-                        <button class="btn btn-success">Add</button>
-                    </div>
+                    <input type="text"
+                           id="voter-search"
+                           class="form-control"
+                           placeholder="🔎 Search by name or national ID">
 
+                    <input type="hidden" name="related_voter_id" id="selected-voter-id">
+
+                    <div id="search-results" class="search-results"></div>
                 </div>
-            </form>
 
-            <hr>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">If unknown, write temporary name</label>
 
-            @forelse(($voter->relationships ?? collect()) as $rel)
-                <div class="border p-2 mb-2">
-                    <strong>{{ ucfirst($rel->relationship_type) }}</strong>
-
-                    @if($rel->relatedVoter)
-                        → {{ $rel->relatedVoter->full_name }}
-                    @elseif($rel->related_name)
-                        → {{ $rel->related_name }}
-                        <span class="badge bg-warning text-dark">Unconfirmed</span>
-                    @endif
-
-                    <div class="text-muted">
-                        Influence: {{ ucfirst($rel->influence_level) }}
-                    </div>
-
-                    @if($rel->is_primary_influencer)
-                        <span class="badge bg-success">Primary Influencer</span>
-                    @endif
-
-                    @if($rel->notes)
-                        <div>{{ $rel->notes }}</div>
-                    @endif
+                    <input type="text"
+                           name="related_name"
+                           class="form-control"
+                           placeholder="Example: Wife of Ahmad / Son / Relative">
                 </div>
-            @empty
-                <div class="text-muted">No relationships yet.</div>
-            @endforelse
 
-        </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Relationship Type</label>
+
+                    <select name="relationship_type" class="form-control" required>
+                        <option value="spouse">Spouse</option>
+                        <option value="son">Son</option>
+                        <option value="daughter">Daughter</option>
+                        <option value="brother">Brother</option>
+                        <option value="sister">Sister</option>
+                        <option value="father">Father</option>
+                        <option value="mother">Mother</option>
+                        <option value="relative">Relative</option>
+                        <option value="friend">Friend</option>
+                        <option value="neighbor">Neighbor</option>
+                        <option value="influencer">Influencer</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+
+                <div class="col-md-3 mb-3">
+                    <label class="form-label">Primary Influencer</label>
+
+                    <select name="is_primary_influencer" class="form-control" required>
+                        <option value="1">Primary</option>
+                        <option value="0" selected>Secondary</option>
+                    </select>
+                </div>
+
+                <div class="col-md-3 mb-3">
+                    <label class="form-label">Influence Level</label>
+
+                    <select name="influence_level" class="form-control" required>
+                        <option value="low">Low</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High</option>
+                    </select>
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Notes</label>
+
+                    <input type="text"
+                           name="notes"
+                           class="form-control"
+                           placeholder="Example: Promised they will come together">
+                </div>
+
+                <div class="col-md-12">
+                    <button class="btn btn-success">Add Relationship</button>
+                </div>
+
+            </div>
+        </form>
+
+        <hr>
+
+        @forelse(($voter->relationships ?? collect()) as $rel)
+            <div class="border p-2 mb-2">
+                <strong>{{ ucfirst($rel->relationship_type) }}</strong>
+
+                @if($rel->relatedVoter)
+                    → {{ $rel->relatedVoter->full_name }}
+                @elseif($rel->related_name)
+                    → {{ $rel->related_name }}
+                    <span class="badge bg-warning text-dark">Unconfirmed</span>
+                @endif
+
+                <div class="text-muted">
+                    Influence: {{ ucfirst($rel->influence_level) }}
+                </div>
+
+                @if($rel->is_primary_influencer)
+                    <span class="badge bg-success">Primary Influencer</span>
+                @endif
+
+                @if($rel->notes)
+                    <div>{{ $rel->notes }}</div>
+                @endif
+            </div>
+        @empty
+            <div class="text-muted">No relationships yet.</div>
+        @endforelse
+
     </div>
+</div>
 
 </div>
 
@@ -209,21 +254,22 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-
     let timer;
 
     const input = document.getElementById('voter-search');
     const resultsBox = document.getElementById('search-results');
     const hiddenInput = document.getElementById('selected-voter-id');
 
-    // 🛑 حماية إضافية
     if (!input || !resultsBox || !hiddenInput) return;
 
-    input.addEventListener('input', function () {
+    const SEARCH_URL = "{{ route('voters.search.simple') }}";
 
+    input.addEventListener('input', function () {
         clearTimeout(timer);
 
         const query = this.value.trim();
+
+        hiddenInput.value = '';
 
         if (query.length < 2) {
             resultsBox.innerHTML = '';
@@ -231,14 +277,14 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         timer = setTimeout(() => {
-            const SEARCH_URL = "{{ route('voters.search.simple') }}";
-
             fetch(`${SEARCH_URL}?q=${encodeURIComponent(query)}`)
-                .then(res => res.json())
+                .then(res => {
+                    if (!res.ok) throw new Error('Search request failed');
+                    return res.json();
+                })
                 .then(data => {
-
                     if (!data.length) {
-                        resultsBox.innerHTML = '<div class="search-item">لا توجد نتائج</div>';
+                        resultsBox.innerHTML = '<div class="search-item">No results</div>';
                         return;
                     }
 
@@ -255,27 +301,21 @@ document.addEventListener('DOMContentLoaded', function () {
                     });
 
                     resultsBox.innerHTML = html;
-
+                })
+                .catch(() => {
+                    resultsBox.innerHTML = '<div class="search-item">Search error</div>';
                 });
-
         }, 300);
-
     });
 
     resultsBox.addEventListener('click', function (e) {
-
         const item = e.target.closest('.search-item');
         if (!item) return;
 
-        const id = item.dataset.id;
-        const name = item.dataset.name;
-
-        hiddenInput.value = id;
-        input.value = name;
-
+        hiddenInput.value = item.dataset.id;
+        input.value = item.dataset.name;
         resultsBox.innerHTML = '';
     });
-
 });
 </script>
 

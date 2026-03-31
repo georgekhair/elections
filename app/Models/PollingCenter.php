@@ -29,4 +29,8 @@ class PollingCenter extends Model
     {
         return $this->hasMany(Alert::class);
     }
+    public function fieldTasks()
+    {
+        return $this->hasMany(FieldTask::class);
+    }
 }

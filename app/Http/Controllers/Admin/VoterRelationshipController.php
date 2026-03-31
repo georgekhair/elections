@@ -21,7 +21,7 @@ class VoterRelationshipController extends Controller
 
         if (empty($validated['related_voter_id']) && empty($validated['related_name'])) {
             return back()->withErrors([
-                'related_voter_id' => 'Choose a voter or enter a temporary relationship name.',
+                'related_voter_id' => 'Choose a voter or enter a temporary related person name.',
             ])->withInput();
         }
 

@@ -23,6 +23,7 @@ class VoterRelationship extends Model
 
     protected $casts = [
         'is_primary_influencer' => 'boolean',
+        'is_unconfirmed' => 'boolean',
     ];
 
     public function voter()
