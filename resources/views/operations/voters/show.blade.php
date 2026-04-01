@@ -214,10 +214,13 @@
 
                             <div class="row">
 
-                                <div class="col-md-4 mb-3 position-relative">
+                                <div class="col-md-4 mb-3 position-relative search-wrapper">
                                     <label class="form-label">البحث عن ناخب موجود</label>
 
-                                    <input type="text" id="voter-search" class="form-control"
+                                    <input type="text"
+                                        id="voter-search"
+                                        class="form-control"
+                                        data-target="selected-voter-id"
                                         placeholder="🔎 ابحث بالاسم أو رقم الهوية">
 
                                     <input type="hidden" name="related_voter_id" id="selected-voter-id">
@@ -344,8 +347,22 @@
                                     <div class="row g-2">
 
                                         <div class="col-md-4">
-                                            <input type="number" name="related_voter_id" class="form-control"
-                                                placeholder="معرف العضو المرتبط" value="{{ $rel->related_voter_id }}">
+                                            <div class="col-md-4 position-relative search-wrapper">
+
+                                                <input type="text"
+                                                    class="form-control voter-search-edit"
+                                                    placeholder="🔎 ابحث عن الناخب"
+                                                    value="{{ $rel->relatedVoter->full_name ?? '' }}"
+                                                    data-target="edit-voter-id-{{ $rel->id }}">
+
+                                                <input type="hidden"
+                                                    name="related_voter_id"
+                                                    id="edit-voter-id-{{ $rel->id }}"
+                                                    value="{{ $rel->related_voter_id }}">
+
+                                                <div class="search-results"></div>
+
+                                            </div>
                                         </div>
 
                                         <div class="col-md-4">
@@ -431,69 +448,90 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-            let timer;
 
-            const input = document.getElementById('voter-search');
-            const resultsBox = document.getElementById('search-results');
-            const hiddenInput = document.getElementById('selected-voter-id');
+        let timer;
+        const SEARCH_URL = "{{ route('voters.search.simple') }}";
 
-            if (!input || !resultsBox || !hiddenInput) return;
+        document.body.addEventListener('input', function (e) {
 
-            const SEARCH_URL = "{{ route('voters.search.simple') }}";
+            if (!e.target.classList.contains('voter-search-edit') && e.target.id !== 'voter-search') return;
 
-            input.addEventListener('input', function () {
-                clearTimeout(timer);
+            const input = e.target;
 
-                const query = this.value.trim();
+            const wrapper = input.closest('.search-wrapper');
+            if (!wrapper) return; // ✅ حماية
 
-                hiddenInput.value = '';
+            const resultsBox = wrapper.querySelector('.search-results');
 
-                if (query.length < 2) {
-                    resultsBox.innerHTML = '';
-                    return;
-                }
+            const hiddenInputId = input.dataset.target || 'selected-voter-id';
+            const hiddenInput = document.getElementById(hiddenInputId);
 
-                timer = setTimeout(() => {
-                    fetch(`${SEARCH_URL}?q=${encodeURIComponent(query)}`)
-                        .then(res => {
-                            if (!res.ok) throw new Error('Search request failed');
-                            return res.json();
-                        })
-                        .then(data => {
-                            if (!data.length) {
-                                resultsBox.innerHTML = '<div class="search-item">لا توجد نتائج</div>';
-                                return;
-                            }
+            clearTimeout(timer);
 
-                            let html = '';
+            const query = input.value.trim();
+            hiddenInput.value = '';
 
-                            data.forEach(voter => {
-                                html += `
+            if (query.length < 2) {
+                resultsBox.innerHTML = '';
+                return;
+            }
+
+            timer = setTimeout(() => {
+
+                resultsBox.innerHTML = '<div class="search-item">جاري البحث...</div>';
+
+                fetch(`${SEARCH_URL}?q=${encodeURIComponent(query)}`)
+                    .then(res => res.json())
+                    .then(data => {
+
+                        if (!data.length) {
+                            resultsBox.innerHTML = '<div class="search-item">لا توجد نتائج</div>';
+                            return;
+                        }
+
+                        let html = '';
+
+                        data.forEach(voter => {
+                            html += `
                                 <div class="search-item"
-                                     data-id="${voter.id}"
-                                     data-name="${voter.full_name}">
+                                    data-id="${voter.id}"
+                                    data-name="${voter.full_name}">
                                     ${voter.full_name} (${voter.national_id})
                                 </div>
                             `;
-                            });
-
-                            resultsBox.innerHTML = html;
-                        })
-                        .catch(() => {
-                            resultsBox.innerHTML = '<div class="search-item">خطأ في البحث</div>';
                         });
-                }, 300);
-            });
 
-            resultsBox.addEventListener('click', function (e) {
-                const item = e.target.closest('.search-item');
-                if (!item) return;
+                        resultsBox.innerHTML = html;
+                    })
+                    .catch(() => {
+                        resultsBox.innerHTML = '<div class="search-item">خطأ في البحث</div>';
+                    });
+
+            }, 300);
+        });
+
+        document.body.addEventListener('click', function (e) {
+
+            const item = e.target.closest('.search-item');
+
+            if (item) {
+
+                const wrapper = item.closest('.search-wrapper');
+                if (!wrapper) return; // ✅ حماية
+
+                const input = wrapper.querySelector('input[type="text"]');
+                const hiddenInput = wrapper.querySelector('input[type="hidden"]');
 
                 hiddenInput.value = item.dataset.id;
                 input.value = item.dataset.name;
-                resultsBox.innerHTML = '';
-            });
+
+                wrapper.querySelector('.search-results').innerHTML = '';
+            } else {
+                document.querySelectorAll('.search-results').forEach(el => el.innerHTML = '');
+            }
         });
+
+    });
     </script>
 
     <style>
@@ -581,19 +619,22 @@
             margin-bottom: 12px;
         }
 
+        .search-wrapper {
+            position: relative;
+        }
+
         .search-results {
-            position: absolute;
-            top: 100%;
-            left: 0;
+
+            top: calc(100% + 6px);
             right: 0;
+            width: 100%;
             background: #fff;
             border: 1px solid #e5e7eb;
             border-radius: 10px;
             max-height: 220px;
             overflow-y: auto;
-            z-index: 1000;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
-            margin-top: 4px;
+            z-index: 9999;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.08);
         }
 
         .search-item {
@@ -601,6 +642,7 @@
             cursor: pointer;
             border-bottom: 1px solid #f1f5f9;
             font-size: 14px;
+            text-align: right;
         }
 
         .search-item:last-child {
@@ -625,6 +667,7 @@
             padding: 16px;
             margin-bottom: 14px;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            overflow: visible !important;
         }
 
         .record-header {
@@ -720,6 +763,18 @@
         .info-badge.yellow {
             background: #fef3c7;
             color: #a16207;
+        }
+        .card-body {
+            overflow: visible !important;
+        }
+
+        col-md-4.position-relative {
+            z-index: 10;
+        }
+        .card,
+        .card-body,
+        .edit-form-box {
+            overflow: visible !important;
         }
     </style>
 @endsection
