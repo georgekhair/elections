@@ -4,13 +4,13 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Imports\VotersImport;
+use App\Imports\VoterStatusUpdateImport;
 use App\Models\VoterImportRun;
 use App\Services\CenterResolverService;
 use App\Services\VoterImportPreviewService;
 use Illuminate\Http\Request;
-use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Facades\Storage;
-use App\Imports\VoterStatusUpdateImport;
+use Maatwebsite\Excel\Facades\Excel;
 
 class VoterImportController extends Controller
 {
@@ -25,15 +25,29 @@ class VoterImportController extends Controller
     {
         $request->validate([
             'file' => 'required|mimes:csv,xlsx,xls',
+            'import_type' => 'required|in:safe,full,names_only',
         ]);
 
         $result = $previewService->preview($request->file('file'), auth()->id());
+
+        if (isset($result['run']) && $result['run'] instanceof VoterImportRun) {
+            $result['run']->update([
+                'import_type' => $request->import_type,
+            ]);
+
+            $result['run']->refresh();
+        }
+
+        $result['selected_import_type'] = $request->import_type;
 
         return view('admin.voters.import-preview', $result);
     }
 
     public function confirm(VoterImportRun $run, CenterResolverService $centerResolver)
     {
+        set_time_limit(0); // 🔥 يمنع timeout
+        ini_set('memory_limit', '512M'); // اختياري
+
         $run->update([
             'status' => 'importing',
             'started_at' => now(),
@@ -45,6 +59,7 @@ class VoterImportController extends Controller
             new VotersImport($run, $centerResolver),
             $path
         );
+
 
         $run->refresh();
 
@@ -69,6 +84,7 @@ class VoterImportController extends Controller
     {
         $request->validate([
             'file' => 'required|mimes:csv,xlsx,xls',
+            'import_type' => 'required|in:safe,full,names_only',
         ]);
 
         $storedPath = $request->file('file')->store('imports', 'local');
@@ -77,6 +93,7 @@ class VoterImportController extends Controller
             'original_filename' => $request->file('file')->getClientOriginalName(),
             'stored_path' => $storedPath,
             'status' => 'previewed',
+            'import_type' => $request->import_type,
             'created_by' => auth()->id(),
         ]);
 
@@ -121,6 +138,7 @@ class VoterImportController extends Controller
             'original_filename' => $request->file('file')->getClientOriginalName(),
             'stored_path' => $storedPath,
             'status' => 'previewed_status_update',
+            'import_type' => 'status_only',
             'created_by' => auth()->id(),
         ]);
 
@@ -197,5 +215,4 @@ class VoterImportController extends Controller
             ],
         ]);
     }
-
 }

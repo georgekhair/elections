@@ -10,10 +10,15 @@ class Voter extends Model
         'voter_no',
         'location',
         'national_id',
+        'first_name',
+        'father_name',
+        'grandfather_name',
+        'family_name',
         'full_name',
         'polling_center_id',
         'priority_level',
         'assigned_delegate_id',
+        'supervisor_id',
         'support_status',
         'is_voted',
         'voted_at',
@@ -95,5 +100,10 @@ class Voter extends Model
     public function assignedDelegate()
     {
         return $this->belongsTo(User::class, 'assigned_delegate_id');
+    }
+
+    public function supervisor()
+    {
+        return $this->belongsTo(User::class, 'supervisor_id');
     }
 }

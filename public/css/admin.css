@@ -462,7 +462,6 @@ padding:8px 12px;
 }
 
 .admin-table tbody tr{
-background:white;
 box-shadow:0 2px 6px rgba(0,0,0,0.05);
 border-radius:10px;
 overflow:hidden;
@@ -652,16 +651,22 @@ font-weight:bold;
 
 .pagination-wrapper {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column; /* 🔥 أهم تعديل */
+    align-items: center;    /* 🔥 توسيط كامل */
+    justify-content: center;
     margin-top: 20px;
-    flex-wrap: wrap;
     gap: 10px;
+    text-align: center;
 }
-
+.pagination {
+    direction: rtl;
+    justify-content: center !important;
+}
 .pagination-info {
     font-size: 14px;
     color: #666;
+    text-align: center; /* 🔥 */
+    width: 100%;
 }
 
 /* Pagination container */
@@ -713,8 +718,9 @@ font-weight:bold;
     white-space: nowrap; /* 🔥 يمنع التمدد */
 }
 
-.pagination li {
-    display: inline-block !important;
+.pagination {
+    justify-content: center !important;
+    width: 100%;
 }
 
 .pagination a,

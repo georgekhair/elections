@@ -2,7 +2,7 @@
 
 @section('content')
 
-<h1>استيراد الناخبين</h1>
+<h1>📥 استيراد بيانات الناخبين (كامل)</h1>
 
 <div class="card">
     @if(session('success'))
@@ -15,13 +15,24 @@
 
         <label>ملف CSV / Excel</label>
         <input type="file" name="file" required>
-
+        <div class="mb-3">
+            <label class="form-label">نوع الاستيراد</label>
+            <select name="import_type" class="form-control" required>
+                <option value="safe">آمن - يحافظ على الحالات والتوزيع الحالي</option>
+                <option value="full">تحديث كامل - يستبدل البيانات الحالية</option>
+                <option value="names_only">تحديث الأسماء فقط</option>
+            </select>
+        </div>
+        <div class="alert alert-warning">
+            <strong>تنبيه:</strong>
+            خيار "تحديث كامل" سيقوم باستبدال البيانات الحالية مثل الحالة والأولوية والتوزيع إذا كانت موجودة في الملف.
+        </div>
         <button class="btn">عرض المعاينة</button>
     </form>
 </div>
 
 <div class="card">
-    <h2>تحديث حالة الناخبين من ملف</h2>
+    <h2>⚡ تحديث الحالة فقط (سريع وآمن)</h2>
     <p style="color:#666; margin-bottom:10px;">
         هذا الخيار يحدّث فقط حقل الحالة بناءً على رقم الهوية، ولن يعدّل إلا الناخبين الذين حالتهم الحالية غير معروفة.
     </p>
@@ -32,6 +43,7 @@
 
         <label>ملف CSV / Excel يحتوي national_id و support_status</label>
         <input type="file" name="file" required>
+
 
         <button class="btn btn-warning">عرض معاينة تحديث الحالة</button>
     </form>

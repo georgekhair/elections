@@ -12,30 +12,52 @@ class DataPreparationController extends Controller
 {
     public function index(Request $request)
     {
-        //$query = Voter::with(['delegate', 'pollingCenter']);
-        $query = Voter::with(['delegate', 'pollingCenter'])
-        ->withCount([
-            'voterNotes',
-            'relationships',
-            'actionableVoterNotes',
-        ]);
+        $query = Voter::with(['delegate', 'supervisor', 'pollingCenter'])
+            ->withCount([
+                'voterNotes',
+                'relationships',
+                'actionableVoterNotes',
+            ]);
+
         $this->applyFilters($query, $request);
 
-        $totals = $this->getTotals($query);
+        $totals = $this->getTotals($request);
 
         $voters = $query->paginate(50)->withQueryString();
 
         $centers = PollingCenter::orderBy('name')->get();
         $delegates = User::role('delegate')->orderBy('name')->get();
+        $supervisors = User::role('supervisor')->orderBy('name')->get();
+        $families = Voter::query()
+            ->whereNotNull('family_name')
+            ->where('family_name', '!=', '')
+            ->distinct()
+            ->orderBy('family_name')
+            ->pluck('family_name');
 
-        return view('operations.data-preparation.index', compact('voters', 'centers', 'delegates', 'totals'));
+        if ($request->ajax()) {
+            return response()->json([
+                'html' => view('operations.data-preparation.partials.table-rows', compact('voters', 'delegates', 'supervisors'))->render(),
+                'pagination' => $voters->links()->toHtml(),
+                'pagination_info' => 'عرض ' . $voters->firstItem() . ' إلى ' . $voters->lastItem() . ' من ' . $voters->total(),
+                'totals' => $totals,
+            ]);
+        }
+
+        return view('operations.data-preparation.index', compact(
+            'voters',
+            'centers',
+            'delegates',
+            'supervisors',
+            'totals',
+            'families'
+        ));
     }
 
     public function search(Request $request)
     {
         try {
-
-            $query = Voter::with(['delegate', 'pollingCenter'])
+            $query = Voter::with(['delegate', 'supervisor', 'pollingCenter'])
                 ->withCount([
                     'voterNotes',
                     'relationships',
@@ -44,19 +66,22 @@ class DataPreparationController extends Controller
 
             $this->applyFilters($query, $request);
 
-            $totals = $this->getTotals($query);
+            $totals = $this->getTotals($request);
 
-            $voters = $query->limit(50)->get();
+            $voters = $query->paginate(50)->withQueryString();
 
             $delegates = User::role('delegate')->orderBy('name')->get();
 
+            $supervisors = User::role('supervisor')->orderBy('name')->get();
+
             return response()->json([
-                'html' => view('operations.data-preparation.partials.table-rows', compact('voters','delegates'))->render(),
-                'totals' => $totals
+                'html' => view('operations.data-preparation.partials.table-rows', compact('voters', 'delegates', 'supervisors'))->render(),
+                'pagination' => $voters->links()->toHtml(),
+                'pagination_info' => 'عرض ' . $voters->firstItem() . ' إلى ' . $voters->lastItem() . ' من ' . $voters->total(),
+                'totals' => $totals,
             ]);
 
         } catch (\Throwable $e) {
-
             return response()->json([
                 'error' => true,
                 'message' => $e->getMessage()
@@ -69,16 +94,35 @@ class DataPreparationController extends Controller
         $request->validate([
             'support_status' => 'nullable|in:supporter,leaning,undecided,opposed,unknown',
             'priority_level' => 'nullable|in:high,medium,low',
-            'assigned_delegate_id' => 'nullable|exists:users,id',
+            'assigned_delegate_id' => 'nullable',
         ]);
 
-        $data = $request->only([
-            'support_status',
-            'priority_level',
-            'assigned_delegate_id',
-        ]);
+        $data = [];
 
-        $data = array_filter($data, fn ($v) => !is_null($v));
+        if ($request->has('assigned_delegate_id')) {
+            $value = trim((string) $request->assigned_delegate_id);
+
+            if ($value === '') {
+                $data['assigned_delegate_id'] = null;
+                $data['supervisor_id'] = null;
+            } elseif (str_starts_with($value, 'supervisor_')) {
+                $supervisorId = (int) str_replace('supervisor_', '', $value);
+
+                $data['supervisor_id'] = $supervisorId;
+                $data['assigned_delegate_id'] = null;
+            } else {
+                $data['assigned_delegate_id'] = (int) $value;
+                $data['supervisor_id'] = null;
+            }
+        }
+
+        if ($request->filled('support_status')) {
+            $data['support_status'] = $request->support_status;
+        }
+
+        if ($request->filled('priority_level')) {
+            $data['priority_level'] = $request->priority_level;
+        }
 
         $voter->update($data);
 
@@ -91,10 +135,21 @@ class DataPreparationController extends Controller
     public function bulkAssign(Request $request)
     {
         $request->validate([
-            'voter_ids' => 'required|array|min:1',
-            'voter_ids.*' => 'exists:voters,id',
-            'assigned_delegate_id' => 'required|exists:users,id',
+            'voter_ids' => [
+                'required',
+                function ($attribute, $value, $fail) {
+                    if ($value !== 'ALL' && !is_array($value)) {
+                        $fail('صيغة الناخبين غير صحيحة');
+                    }
+                },
+            ],
+            'assigned_delegate_id' => 'nullable|exists:users,id',
+            'supervisor_id' => 'nullable|exists:users,id',
         ]);
+
+        if (!$request->filled('assigned_delegate_id') && !$request->filled('supervisor_id')) {
+            return back()->withErrors(['يجب اختيار مندوب أو مشرف']);
+        }
 
         if ($request->voter_ids === 'ALL') {
 
@@ -113,8 +168,19 @@ class DataPreparationController extends Controller
                 $query->where('priority_level', $request->priority);
             }
 
+            // ✅ FAMILY FILTER
+            if ($request->family_name) {
+                $query->where('family_name', $request->family_name);
+            }
+
             if ($request->delegate_id) {
-                $query->where('assigned_delegate_id', $request->delegate_id);
+                $delegateFilter = (string) $request->delegate_id;
+
+                if (str_starts_with($delegateFilter, 'supervisor_')) {
+                    $query->where('supervisor_id', str_replace('supervisor_', '', $delegateFilter));
+                } else {
+                    $query->where('assigned_delegate_id', $delegateFilter);
+                }
             }
 
             if ($request->unassigned) {
@@ -150,9 +216,20 @@ class DataPreparationController extends Controller
             $ids = $request->voter_ids;
         }
 
-        Voter::whereIn('id', $ids)->update([
-            'assigned_delegate_id' => $request->assigned_delegate_id,
-        ]);
+        if ($request->filled('supervisor_id')) {
+
+            Voter::whereIn('id', $ids)->update([
+                'supervisor_id' => $request->supervisor_id,
+                'assigned_delegate_id' => null,
+            ]);
+
+        } else {
+
+            Voter::whereIn('id', $ids)->update([
+                'assigned_delegate_id' => $request->assigned_delegate_id,
+                'supervisor_id' => null,
+            ]);
+        }
 
         return back()->with('success', 'تم توزيع الناخبين على المندوب بنجاح');
     }
@@ -194,8 +271,19 @@ class DataPreparationController extends Controller
                     $query->where('priority_level', $request->priority);
                 }
 
+                    // ✅ FAMILY FILTER (NEW)
+                if ($request->family_name) {
+                    $query->where('family_name', $request->family_name);
+                }
+
                 if ($request->delegate_id) {
-                    $query->where('assigned_delegate_id', $request->delegate_id);
+                    $delegateFilter = (string) $request->delegate_id;
+
+                    if (str_starts_with($delegateFilter, 'supervisor_')) {
+                        $query->where('supervisor_id', str_replace('supervisor_', '', $delegateFilter));
+                    } else {
+                        $query->where('assigned_delegate_id', $delegateFilter);
+                    }
                 }
 
                 if ($request->unassigned) {
@@ -252,11 +340,21 @@ class DataPreparationController extends Controller
         if ($request->filled('priority')) {
             $query->where('priority_level', $request->priority);
         }
-
+        // ✅ FAMILY FILTER (NEW)
+        if ($request->filled('family_name')) {
+            $query->where('family_name', $request->family_name);
+        }
         if ($request->boolean('unassigned')) {
             $query->whereNull('assigned_delegate_id');
-        } elseif ($request->filled('delegate_id')) {
-            $query->where('assigned_delegate_id', $request->delegate_id);
+        }
+        elseif ($request->filled('delegate_id')) {
+            $value = (string) $request->delegate_id;
+
+            if (str_starts_with($value, 'supervisor_')) {
+                $query->where('supervisor_id', str_replace('supervisor_', '', $value));
+            } else {
+                $query->where('assigned_delegate_id', $value);
+            }
         }
 
         if ($request->boolean('target')) {
@@ -363,15 +461,12 @@ class DataPreparationController extends Controller
         }
     }
 
-    private function getTotals($query)
+    private function getTotals(Request $request)
     {
-        // 🔥 STEP 1: create a clean base query (NO withCount, NO select pollution)
         $base = Voter::query();
 
-        // 🔥 STEP 2: copy ONLY filters (not the mutated builder)
-        $this->applyFilters($base, request(), false);
+        $this->applyFilters($base, $request, false);
 
-        // 🔥 STEP 3: run aggregate safely
         return $base->selectRaw("
             COUNT(*) as total,
             SUM(CASE WHEN support_status = 'supporter' THEN 1 ELSE 0 END) as supporter,
@@ -384,32 +479,97 @@ class DataPreparationController extends Controller
 
     public function searchSimple(Request $request)
     {
-        $query = trim($request->q);
+        $search = trim($request->q);
 
-        if (!$query || strlen($query) < 2) {
+        if (!$search || strlen($search) < 2) {
             return response()->json([]);
         }
 
-        $voters = Voter::selectRaw("
-                id, full_name, national_id,
+        $words = preg_split('/\s+/', $search);
 
-                (
-                    (CASE WHEN full_name LIKE ? THEN 100 ELSE 0 END)
-                    +
-                    (CASE WHEN full_name LIKE ? THEN 70 ELSE 0 END)
-                    +
-                    (CASE WHEN CAST(national_id AS CHAR) LIKE ? THEN 50 ELSE 0 END)
-                ) as relevance_score
-            ", [
-                "%{$query}%",
-                "%" . str_replace(' ', '%', $query) . "%",
-                "%{$query}%"
-            ])
-            ->where(function ($q2) use ($query) {
-                $q2->where('full_name', 'like', "%{$query}%")
-                ->orWhere('national_id', 'like', "%{$query}%")
-                ->orWhere('voter_no', $query);
+        // =========================
+        // BUILD SCORE (SMART)
+        // =========================
+
+        $bindings = [];
+        $scoreParts = [];
+
+        // 🔥 exact full match
+        $scoreParts[] = "CASE WHEN full_name LIKE ? THEN 120 ELSE 0 END";
+        $bindings[] = "%{$search}%";
+
+        // 🔥 phrase match (words together)
+        $scoreParts[] = "CASE WHEN full_name LIKE ? THEN 90 ELSE 0 END";
+        $bindings[] = "%" . implode('%', $words) . "%";
+
+        // 🔥 individual words match
+        foreach ($words as $word) {
+            if (!$word) continue;
+
+            $scoreParts[] = "CASE WHEN full_name LIKE ? THEN 30 ELSE 0 END";
+            $bindings[] = "%{$word}%";
+
+            $scoreParts[] = "CASE WHEN first_name LIKE ? THEN 20 ELSE 0 END";
+            $bindings[] = "%{$word}%";
+
+            $scoreParts[] = "CASE WHEN father_name LIKE ? THEN 15 ELSE 0 END";
+            $bindings[] = "%{$word}%";
+
+            $scoreParts[] = "CASE WHEN grandfather_name LIKE ? THEN 10 ELSE 0 END";
+            $bindings[] = "%{$word}%";
+
+            $scoreParts[] = "CASE WHEN family_name LIKE ? THEN 25 ELSE 0 END";
+            $bindings[] = "%{$word}%";
+        }
+
+        // 🔥 national id match
+        $scoreParts[] = "CASE WHEN CAST(national_id AS CHAR) LIKE ? THEN 80 ELSE 0 END";
+        $bindings[] = "%{$search}%";
+
+        // 🔥 voter number exact
+        if (is_numeric($search)) {
+            $scoreParts[] = "CASE WHEN voter_no = ? THEN 100 ELSE 0 END";
+            $bindings[] = $search;
+        }
+
+        $scoreSql = implode(' + ', $scoreParts);
+
+        // =========================
+        // QUERY
+        // =========================
+
+        $voters = Voter::selectRaw("
+                id,
+                full_name,
+                national_id,
+                voter_no,
+                ({$scoreSql}) as relevance_score
+            ", $bindings)
+
+            ->where(function ($q) use ($search, $words) {
+
+                // full phrase
+                $q->where('full_name', 'like', "%{$search}%");
+
+                // words
+                foreach ($words as $word) {
+                    if (!$word) continue;
+
+                    $q->orWhere('full_name', 'like', "%{$word}%")
+                    ->orWhere('first_name', 'like', "%{$word}%")
+                    ->orWhere('father_name', 'like', "%{$word}%")
+                    ->orWhere('grandfather_name', 'like', "%{$word}%")
+                    ->orWhere('family_name', 'like', "%{$word}%")
+                    ->orWhere('national_id', 'like', "%{$word}%");
+                }
+
+                // numeric search
+                if (is_numeric($search)) {
+                    $q->orWhere('national_id', 'like', "%{$search}%")
+                    ->orWhere('voter_no', $search);
+                }
             })
+
             ->orderByDesc('relevance_score')
             ->limit(10)
             ->get();

@@ -5,12 +5,16 @@
 <h1>تجهيز بيانات الناخبين</h1>
 
 {{-- Active Filters --}}
-@if(request()->hasAny(['center_id', 'status', 'priority', 'delegate_id', 'unassigned', 'has_notes', 'needs_action', 'high_priority_notes', 'has_relationships', 'has_influencer']))
+@if(request()->hasAny(['center_id', 'status', 'priority', 'delegate_id', 'unassigned', 'family_name', 'has_notes', 'needs_action', 'high_priority_notes', 'has_relationships', 'has_influencer']))
 <div class="card" style="margin-bottom:15px;">
     <strong>الفلاتر الحالية:</strong>
 
     @if(request('center_id'))
         <span class="badge badge-operations">مركز محدد</span>
+    @endif
+
+    @if(request('family_name'))
+        <span class="badge badge-admin">العائلة: {{ request('family_name') }}</span>
     @endif
 
     @if(request('status'))
@@ -95,10 +99,33 @@
 
         {{-- Delegates --}}
         <select name="delegate_id" onchange="liveSearch()">
-            <option value="">كل المندوبين</option>
-            @foreach($delegates as $d)
-                <option value="{{ $d->id }}" @selected(request('delegate_id') == $d->id)>
-                    {{ $d->name }}
+            <option value="">كل المندوبين والمشرفين</option>
+
+            <optgroup label="👥 المندوبين">
+                @foreach($delegates as $d)
+                    <option value="{{ $d->id }}"
+                        @selected(request('delegate_id') == $d->id)>
+                        {{ $d->name }}
+                    </option>
+                @endforeach
+            </optgroup>
+
+            <optgroup label="🧠 المشرفين">
+                @foreach($supervisors as $s)
+                    <option value="supervisor_{{ $s->id }}"
+                        @selected(request('delegate_id') == 'supervisor_'.$s->id)>
+                        {{ $s->name }} (مشرف)
+                    </option>
+                @endforeach
+            </optgroup>
+        </select>
+
+        {{-- Family --}}
+        <select name="family_name" onchange="liveSearch()">
+            <option value="">كل العائلات</option>
+            @foreach($families as $family)
+                <option value="{{ $family }}" @selected(request('family_name') == $family)>
+                    {{ $family }}
                 </option>
             @endforeach
         </select>
@@ -239,10 +266,19 @@
     <div class="bulk-right">
 
         <select id="bulk-delegate">
-            <option value="">مندوب</option>
-            @foreach($delegates as $d)
-                <option value="{{ $d->id }}">{{ $d->name }}</option>
-            @endforeach
+            <option value="">اختر مندوب أو مشرف</option>
+
+            <optgroup label="👥 المندوبين">
+                @foreach($delegates as $d)
+                    <option value="{{ $d->id }}">{{ $d->name }}</option>
+                @endforeach
+            </optgroup>
+
+            <optgroup label="🧠 المشرفين">
+                @foreach($supervisors as $s)
+                    <option value="supervisor_{{ $s->id }}">{{ $s->name }} (مشرف)</option>
+                @endforeach
+            </optgroup>
         </select>
 
         <button type="button" onclick="bulkAssign()" class="btn btn-primary">
@@ -286,16 +322,22 @@
     </thead>
 
     <tbody id="voters-table">
-        @include('operations.data-preparation.partials.table-rows', ['voters' => $voters, 'delegates' => $delegates])
+        @include('operations.data-preparation.partials.table-rows', [
+            'voters' => $voters,
+            'delegates' => $delegates,
+            'supervisors' => $supervisors
+        ])
     </tbody>
 </table>
 
 {{-- Pagination --}}
-<div class="pagination-wrapper">
-    <div>
+<div id="pagination-box" class="pagination-wrapper">
+    <div id="pagination-info">
         عرض {{ $voters->firstItem() }} إلى {{ $voters->lastItem() }} من {{ $voters->total() }}
     </div>
-    <div>{{ $voters->links() }}</div>
+    <div id="pagination-links">
+        {{ $voters->links() }}
+    </div>
 </div>
 
 </div>
@@ -311,6 +353,8 @@ document.addEventListener('DOMContentLoaded', function () {
     let timer;
     let quickTimer;
     let currentQuickIndex = -1;
+    let controller;
+    let selectedIdsGlobal = new Set();
 
     const quickInput = document.getElementById('quick-search-box');
     const quickResults = document.getElementById('quick-results');
@@ -439,14 +483,6 @@ document.addEventListener('DOMContentLoaded', function () {
         updateBulkBar();
     });
 
-    // checkbox changes
-    document.addEventListener('change', function(e){
-        if (e.target.classList.contains('row-checkbox')) {
-            selectAllFilteredMode = false;
-            updateBulkBar();
-        }
-    });
-
     // =========================
     // BULK ACTIONS
     // =========================
@@ -467,12 +503,11 @@ document.addEventListener('DOMContentLoaded', function () {
         // 🔥 IMPORTANT: collect current filters
         const params = {
             voter_ids: ids,
-            assigned_delegate_id: delegateId,
-
             center_id: document.querySelector('[name="center_id"]')?.value || '',
             status: document.querySelector('[name="status"]')?.value || '',
             priority: document.querySelector('[name="priority"]')?.value || '',
             delegate_id: document.querySelector('[name="delegate_id"]')?.value || '',
+            family_name: document.querySelector('[name="family_name"]')?.value || '',
             name: document.getElementById('quick-search')?.value || '',
             has_notes: document.querySelector('[name="has_notes"]')?.checked ? 1 : '',
             needs_action: document.querySelector('[name="needs_action"]')?.checked ? 1 : '',
@@ -480,6 +515,12 @@ document.addEventListener('DOMContentLoaded', function () {
             has_relationships: document.querySelector('[name="has_relationships"]')?.checked ? 1 : '',
             has_influencer: document.querySelector('[name="has_influencer"]')?.checked ? 1 : '',
         };
+
+        if (delegateId.startsWith('supervisor_')) {
+            params.supervisor_id = delegateId.replace('supervisor_', '');
+        } else {
+            params.assigned_delegate_id = delegateId;
+        }
 
         fetch("{{ route('operations.data-preparation.bulk-assign') }}", {
             method: 'POST',
@@ -511,6 +552,7 @@ document.addEventListener('DOMContentLoaded', function () {
             center_id: document.querySelector('[name="center_id"]')?.value || '',
             status: document.querySelector('[name="status"]')?.value || '',
             priority: document.querySelector('[name="priority"]')?.value || '',
+            family_name: document.querySelector('[name="family_name"]')?.value || '',
             delegate_id: document.querySelector('[name="delegate_id"]')?.value || '',
             name: document.getElementById('quick-search')?.value || '',
             has_notes: document.querySelector('[name="has_notes"]')?.checked ? 1 : '',
@@ -534,11 +576,16 @@ document.addEventListener('DOMContentLoaded', function () {
     // =========================
     // LIVE SEARCH
     // =========================
-    window.liveSearch = function() {
+    window.liveSearch = function(page = 1) {
         clearTimeout(timer);
 
-        timer = setTimeout(() => {
+        if (controller) {
+            controller.abort();
+        }
 
+        controller = new AbortController();
+
+        timer = setTimeout(() => {
             const params = new URLSearchParams();
 
             const name = document.getElementById('quick-search')?.value;
@@ -546,6 +593,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const status = document.querySelector('[name="status"]')?.value;
             const priority = document.querySelector('[name="priority"]')?.value;
             const delegateId = document.querySelector('[name="delegate_id"]')?.value;
+            const familyName = document.querySelector('[name="family_name"]')?.value;
             const hasNotes = document.querySelector('[name="has_notes"]')?.checked;
             const needsAction = document.querySelector('[name="needs_action"]')?.checked;
             const highPriorityNotes = document.querySelector('[name="high_priority_notes"]')?.checked;
@@ -556,35 +604,88 @@ document.addEventListener('DOMContentLoaded', function () {
             if (center) params.append('center_id', center);
             if (status) params.append('status', status);
             if (priority) params.append('priority', priority);
+            if (familyName) params.append('family_name', familyName);
             if (delegateId) params.append('delegate_id', delegateId);
             if (hasNotes) params.append('has_notes', 1);
             if (needsAction) params.append('needs_action', 1);
             if (highPriorityNotes) params.append('high_priority_notes', 1);
             if (hasRelationships) params.append('has_relationships', 1);
             if (hasInfluencer) params.append('has_influencer', 1);
+            if (page > 1) params.append('page', page);
 
-            fetch(`/operations/data-preparation/search?${params.toString()}`)
-                .then(res => res.json())
-                .then(data => {
+            const newUrl = `${window.location.pathname}?${params.toString()}`;
+            window.history.replaceState({}, '', newUrl);
 
-                    if (data.error) {
-                        console.error(data.message);
-                        return;
-                    }
+            document.getElementById('voters-table').innerHTML = `
+                <tr>
+                    <td colspan="7" style="text-align:center;padding:20px;">
+                        ⏳ جاري التحميل...
+                    </td>
+                </tr>
+            `;
 
-                    document.getElementById('voters-table').innerHTML = data.html;
-                    updateTotals(data.totals);
+            fetch(`/operations/data-preparation/search?${params.toString()}`, {
+                signal: controller.signal,
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(async res => {
+                const text = await res.text();
 
-                    selectAllFilteredMode = false;
-                    updateBulkBar();
-                })
-                .catch(err => {
+                try {
+                    return JSON.parse(text);
+                } catch (e) {
+                    console.error("❌ Invalid JSON:", text);
+                    throw e;
+                }
+            })
+            .then(data => {
+                if (data.error) {
+                    console.error(data.message);
+                    return;
+                }
+
+                document.getElementById('voters-table').innerHTML = data.html;
+                document.getElementById('pagination-links').innerHTML = data.pagination || '';
+                document.getElementById('pagination-info').innerHTML = data.pagination_info || '';
+                updateTotals(data.totals);
+
+                selectAllFilteredMode = false;
+                updateBulkBar();
+
+                restoreSelectedCheckboxes();
+            })
+            .catch(err => {
+                if (err.name !== 'AbortError') {
                     console.error('Search error:', err);
-                });
+                }
+            });
 
         }, 400);
     };
 
+    document.addEventListener('click', function(e) {
+        const link = e.target.closest('.pagination a');
+        if (!link) return;
+
+        e.preventDefault();
+
+        const url = new URL(link.href);
+        const page = url.searchParams.get('page') || 1;
+
+        liveSearch(page);
+
+        document.querySelector('.admin-table').scrollIntoView({
+            behavior: 'smooth'
+        });
+    });
+    function restoreSelectedCheckboxes() {
+        document.querySelectorAll('.row-checkbox').forEach(cb => {
+            cb.checked = selectedIdsGlobal.has(cb.value);
+        });
+    }
     // =========================
     // QUICK SEARCH
     // =========================
@@ -665,12 +766,16 @@ document.addEventListener('DOMContentLoaded', function () {
             };
 
             if (keyMap[e.key]) {
-                e.preventDefault();
 
                 const active = getActiveQuickItem();
+
+                // ✅ إذا ما في نتيجة مختارة → اكتب الرقم عادي
                 if (!active) return;
 
+                e.preventDefault(); // ⬅️ فقط إذا في عنصر محدد
+
                 const id = active.dataset.id;
+
                 const btnIndexMap = {
                     supporter: 1,
                     leaning: 2,
@@ -832,6 +937,25 @@ document.addEventListener('DOMContentLoaded', function () {
             </div>
         `;
     }
+
+    document.addEventListener('change', function(e){
+        if (e.target.classList.contains('row-checkbox')) {
+
+            if (e.target.checked) {
+                selectedIdsGlobal.add(e.target.value);
+            } else {
+                selectedIdsGlobal.delete(e.target.value);
+            }
+
+            updateBulkBar();
+        }
+    });
+
+    document.querySelectorAll('.row-checkbox').forEach(cb => {
+        if (selectedIdsGlobal.has(cb.value)) {
+            cb.checked = true;
+        }
+    });
 
 });
 </script>
@@ -1160,7 +1284,7 @@ kbd{
     display:flex;
     align-items:center;
     gap:4px;
-    background:#f9fafb;
+
     padding:5px 10px;
     border-radius:8px;
     font-size:13px;

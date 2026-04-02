@@ -1,5 +1,14 @@
 @forelse($voters as $voter)
-<tr style="{{ ($voter->actionable_voter_notes_count ?? 0) > 0 ? 'background:#fff7ed;' : '' }}">
+<tr class="
+    status-row
+    status-{{ $voter->support_status ?? 'unknown' }}
+
+    {{ ($voter->actionable_voter_notes_count ?? 0) > 0 ? 'has-action' : '' }}
+    {{ ($voter->voter_notes_count ?? 0) > 0 ? 'has-notes' : '' }}
+    {{ ($voter->relationships_count ?? 0) > 0 ? 'has-relationships' : '' }}
+
+    priority-{{ $voter->priority_level ?? 'medium' }}
+">
     <td>
         <input type="checkbox" class="row-checkbox" value="{{ $voter->id }}">
     </td>
@@ -10,6 +19,9 @@
 
             <span>{{ $voter->full_name }}</span>
 
+            @if(($voter->relationships_count ?? 0) > 0)
+                <span class="table-indicator table-indicator-influence" title="لديه تأثير">⭐</span>
+            @endif
             @if(($voter->voter_notes_count ?? 0) > 0)
                 <span class="table-indicator table-indicator-note" title="لديه ملاحظات">
                     📝
@@ -60,12 +72,29 @@
     <td>
         <div class="inline-edit">
             <select onchange="updateVoter(this, {{ $voter->id }}, 'assigned_delegate_id')">
+
                 <option value="">—</option>
-                @foreach($delegates as $d)
-                    <option value="{{ $d->id }}" @selected($voter->assigned_delegate_id == $d->id)>
-                        {{ $d->name }}
-                    </option>
-                @endforeach
+
+                {{-- 👇 المندوبين --}}
+                <optgroup label="👥 المندوبين">
+                    @foreach($delegates as $d)
+                        <option value="{{ $d->id }}"
+                            @selected($voter->assigned_delegate_id == $d->id)>
+                            {{ $d->name }}
+                        </option>
+                    @endforeach
+                </optgroup>
+
+                {{-- 👇 المشرفين --}}
+                <optgroup label="🧠 المشرفين">
+                    @foreach($supervisors as $s)
+                        <option value="supervisor_{{ $s->id }}"
+                            @selected($voter->supervisor_id == $s->id && !$voter->assigned_delegate_id)>
+                            {{ $s->name }} (مشرف)
+                        </option>
+                    @endforeach
+                </optgroup>
+
             </select>
             <span class="save-status"></span>
         </div>
@@ -118,4 +147,91 @@
     background:#ecfdf5;
     border-color:#bbf7d0;
 }
+
+.table-indicator-influence{
+
+    background:#ecfdf5;
+    border-color:#bbf7d0;
+}
+/* =========================
+STATUS COLORS (BASE)
+========================= */
+
+.status-supporter {
+    background: #f0fdf4;
+}
+
+.status-leaning {
+    background: #eff6ff;
+}
+
+.status-undecided {
+    background: #fffbeb;
+}
+
+.status-opposed {
+    background: #fef2f2;
+}
+
+.status-unknown {
+    background: #f9fafb;
+}
+
+/* =========================
+RIGHT BORDER INDICATOR
+========================= */
+
+.status-supporter { border-right: 4px solid #16a34a; }
+.status-leaning   { border-right: 4px solid #2563eb; }
+.status-undecided { border-right: 4px solid #f59e0b; }
+.status-opposed   { border-right: 4px solid #dc2626; }
+.status-unknown   { border-right: 4px solid #9ca3af; }
+
+/* =========================
+ACTION OVERRIDE (🔥 مهم)
+========================= */
+
+.has-action {
+    background: #fff7ed !important;
+    border-right: 4px solid #f97316 !important;
+}
+
+/* =========================
+NOTES (خفيف)
+========================= */
+
+.has-notes:not(.has-action) {
+    box-shadow: inset 0 0 0 1px rgba(59,130,246,0.15);
+}
+
+/* =========================
+HOVER FIX
+========================= */
+
+.status-row:hover {
+    filter: brightness(0.94);
+    box-shadow: 0 6px 14px rgba(0,0,0,0.08);
+}
+
+.status-row.updated {
+    animation: flashRow 0.6s ease;
+}
+
+@keyframes flashRow {
+    0% { background: #dcfce7; }
+    100% { background: inherit; }
+}
+.status-row {
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.status-row::after {
+    position: absolute;
+    inset: 0;
+    background: transparent;
+    pointer-events: none;
+    border-radius: 8px;
+}
+
 </style>
