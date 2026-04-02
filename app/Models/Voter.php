@@ -56,7 +56,8 @@ class Voter extends Model
             'supporter' => 'مضمون',
             'leaning' => 'يميل',
             'neutral' => 'محايد',
-            'opponent' => 'ضد',
+            'opposed' => 'ضد',
+            'traveling' => 'سافر',
             default => 'غير معروف',
         };
     }

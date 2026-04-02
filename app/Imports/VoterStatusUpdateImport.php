@@ -130,7 +130,7 @@ class VoterStatusUpdateImport implements ToCollection, WithHeadingRow, WithChunk
             3 => 'undecided',
             4 => 'opposed',
             5 => 'unknown',
-            6 => 'unknown',
+            6 => 'traveling',
             default => 'unknown',
         };
     }

@@ -32,6 +32,11 @@
         </div>
 
         <div class="metric">
+            <div class="metric-title">مسافر</div>
+            <div class="metric-value">{{ $metrics['traveling'] }}</div>
+        </div>
+
+        <div class="metric">
             <div class="metric-title">غير معروف</div>
             <div class="metric-value">{{ $metrics['unknown'] }}</div>
         </div>
@@ -153,6 +158,7 @@
                         <th>يميل</th>
                         <th>متردد</th>
                         <th>ضد</th>
+                        <th>مسافر</th>
                         <th>غير معروف</th>
                         <th>موزعين</th>
                         <th>نسبة التصنيف</th>
@@ -173,6 +179,7 @@
                             <td>{{ $center['leaning_count'] }}</td>
                             <td>{{ $center['undecided_count'] }}</td>
                             <td>{{ $center['opposed_count'] }}</td>
+                            <td>{{ $center['traveling_count'] }}</td>
                             <td>{{ $center['unknown_count'] }}</td>
                             <td>{{ $center['assigned_count'] }}</td>
                             <td>{{ $center['classification_rate'] }}%</td>

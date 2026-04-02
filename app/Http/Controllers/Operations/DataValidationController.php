@@ -22,6 +22,7 @@ class DataValidationController extends Controller
         $leaning = Voter::where('support_status', 'leaning')->count();
         $undecided = Voter::where('support_status', 'undecided')->count();
         $opposed = Voter::where('support_status', 'opposed')->count();
+        $traveling = Voter::where('support_status', 'traveling')->count();
         $unknown = Voter::where('support_status', 'unknown')->count();
 
         $highPriority = Voter::where('priority_level', 'high')->count();
@@ -57,6 +58,7 @@ class DataValidationController extends Controller
             'voters as leaning_count' => fn($q) => $q->where('support_status', 'leaning'),
             'voters as undecided_count' => fn($q) => $q->where('support_status', 'undecided'),
             'voters as opposed_count' => fn($q) => $q->where('support_status', 'opposed'),
+            'voters as traveling_count' => fn($q) => $q->where('support_status', 'traveling'),
             'voters as unknown_count' => fn($q) => $q->where('support_status', 'unknown'),
             'voters as assigned_count' => fn($q) => $q->whereNotNull('assigned_delegate_id'),
             'voters as high_priority_count' => fn($q) => $q->where('priority_level', 'high'),
@@ -87,6 +89,7 @@ class DataValidationController extends Controller
                 'leaning_count' => $center->leaning_count,
                 'undecided_count' => $center->undecided_count,
                 'opposed_count' => $center->opposed_count,
+                'traveling_count' => $center->traveling_count,
                 'unknown_count' => $center->unknown_count,
                 'assigned_count' => $center->assigned_count,
                 'high_priority_count' => $center->high_priority_count,
@@ -138,6 +141,7 @@ class DataValidationController extends Controller
                 'leaning' => $leaning,
                 'undecided' => $undecided,
                 'opposed' => $opposed,
+                'traveling' => $traveling,
                 'unknown' => $unknown,
                 'high_priority' => $highPriority,
                 'medium_priority' => $mediumPriority,

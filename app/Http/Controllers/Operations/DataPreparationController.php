@@ -92,7 +92,7 @@ class DataPreparationController extends Controller
     public function update(Request $request, Voter $voter)
     {
         $request->validate([
-            'support_status' => 'nullable|in:supporter,leaning,undecided,opposed,unknown',
+            'support_status' => 'nullable|in:supporter,leaning,undecided,opposed,unknown,traveling',
             'priority_level' => 'nullable|in:high,medium,low',
             'assigned_delegate_id' => 'nullable',
         ]);
@@ -239,7 +239,7 @@ class DataPreparationController extends Controller
         $request->validate([
             'voter_ids' => 'required|array|min:1',
             'voter_ids.*' => 'exists:voters,id',
-            'support_status' => 'nullable|in:supporter,leaning,undecided,opposed,unknown',
+            'support_status' => 'nullable|in:supporter,leaning,undecided,opposed,unknown,traveling',
             'priority_level' => 'nullable|in:high,medium,low',
         ]);
 
@@ -473,6 +473,7 @@ class DataPreparationController extends Controller
             SUM(CASE WHEN support_status = 'leaning' THEN 1 ELSE 0 END) as leaning,
             SUM(CASE WHEN support_status = 'undecided' THEN 1 ELSE 0 END) as undecided,
             SUM(CASE WHEN support_status = 'opposed' THEN 1 ELSE 0 END) as opposed,
+            SUM(CASE WHEN support_status = 'traveling' THEN 1 ELSE 0 END) as traveling,
             SUM(CASE WHEN support_status = 'unknown' THEN 1 ELSE 0 END) as unknown
         ")->first();
     }

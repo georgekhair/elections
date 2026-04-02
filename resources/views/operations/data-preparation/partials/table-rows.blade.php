@@ -52,6 +52,7 @@
                 <option value="leaning" @selected($voter->support_status == 'leaning')>يميل</option>
                 <option value="undecided" @selected($voter->support_status == 'undecided')>متردد</option>
                 <option value="opposed" @selected($voter->support_status == 'opposed')>ضد</option>
+                <option value="traveling" @selected($voter->support_status == 'traveling')>مسافر</option>
                 <option value="unknown" @selected($voter->support_status == 'unknown')>غير معروف</option>
             </select>
             <span class="save-status"></span>
@@ -173,6 +174,11 @@ STATUS COLORS (BASE)
     background: #fef2f2;
 }
 
+.status-traveling {
+    background: #ffedd5;
+    color: #9a3412;
+}
+
 .status-unknown {
     background: #f9fafb;
 }
@@ -185,6 +191,7 @@ RIGHT BORDER INDICATOR
 .status-leaning   { border-right: 4px solid #2563eb; }
 .status-undecided { border-right: 4px solid #f59e0b; }
 .status-opposed   { border-right: 4px solid #dc2626; }
+.status-traveling { border-right: 4px solid #f97316; }
 .status-unknown   { border-right: 4px solid #9ca3af; }
 
 /* =========================

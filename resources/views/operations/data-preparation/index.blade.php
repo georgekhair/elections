@@ -86,6 +86,7 @@
             <option value="leaning" @selected(request('status') == 'leaning')>يميل</option>
             <option value="undecided" @selected(request('status') == 'undecided')>متردد</option>
             <option value="opposed" @selected(request('status') == 'opposed')>ضد</option>
+            <option value="traveling" @selected(request('status') == 'traveling')>مسافر</option>
             <option value="unknown" @selected(request('status') == 'unknown')>غير معروف</option>
         </select>
 
@@ -121,14 +122,17 @@
         </select>
 
         {{-- Family --}}
-        <select name="family_name" onchange="liveSearch()">
-            <option value="">كل العائلات</option>
-            @foreach($families as $family)
-                <option value="{{ $family }}" @selected(request('family_name') == $family)>
-                    {{ $family }}
-                </option>
-            @endforeach
-        </select>
+        <div class="family-search-wrapper">
+            <input type="text"
+                id="family-search"
+                placeholder="🔎 ابحث عن العائلة..."
+                autocomplete="off"
+                value="{{ request('family_name') }}">
+
+            <input type="hidden" name="family_name" id="family-value" value="{{ request('family_name') }}">
+
+            <div id="family-results" class="family-results"></div>
+        </div>
 
     </div>
 
@@ -240,6 +244,11 @@
         <div class="value">{{ $totals->opposed ?? 0 }}</div>
     </div>
 
+    <div class="total-card orange">
+        <div class="label">مسافر</div>
+        <div class="value">{{ $totals->traveling ?? 0 }}</div>
+    </div>
+
     <div class="total-card gray">
         <div class="label">غير معروف</div>
         <div class="value">{{ $totals->unknown ?? 0 }}</div>
@@ -291,6 +300,7 @@
             <option value="leaning">يميل</option>
             <option value="undecided">متردد</option>
             <option value="opposed">ضد</option>
+            <option value="traveling">مسافر</option>
             <option value="unknown">غير معروف</option>
         </select>
 
@@ -418,6 +428,7 @@ document.addEventListener('DOMContentLoaded', function () {
             case 'leaning': return 'يميل';
             case 'undecided': return 'متردد';
             case 'opposed': return 'ضد';
+            case 'traveling': return 'مسافر';
             default: return 'غير معروف';
         }
     }
@@ -428,6 +439,7 @@ document.addEventListener('DOMContentLoaded', function () {
             case 'leaning': return 'status-badge status-leaning';
             case 'undecided': return 'status-badge status-undecided';
             case 'opposed': return 'status-badge status-opposed';
+            case 'traveling': return 'status-badge status-traveling';
             default: return 'status-badge status-unknown';
         }
     }
@@ -762,7 +774,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 '2': 'leaning','٢':'leaning',
                 '3': 'undecided','٣':'undecided',
                 '4': 'opposed','٤':'opposed',
-                '5': 'unknown','٥':'unknown'
+                '5': 'unknown','٥':'unknown',
+                '6': 'traveling','٦':'traveling'
             };
 
             if (keyMap[e.key]) {
@@ -781,7 +794,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     leaning: 2,
                     undecided: 3,
                     opposed: 4,
-                    unknown: 5
+                    unknown: 5,
+                    traveling: 6
                 };
 
                 const status = keyMap[e.key];
@@ -831,6 +845,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         <button type="button" onclick="quickUpdate(${id}, 'leaning', event)" class="btn">يميل</button>
                         <button type="button" onclick="quickUpdate(${id}, 'undecided', event)" class="btn btn-warning">متردد</button>
                         <button type="button" onclick="quickUpdate(${id}, 'opposed', event)" class="btn btn-danger">ضد</button>
+                        <button type="button" onclick="quickUpdate(${id}, 'traveling', event)" class="btn btn-orange">مسافر</button>
                         <button type="button" onclick="quickUpdate(${id}, 'unknown', event)" class="btn">غير معروف</button>
                     </div>
                 </div>
@@ -931,6 +946,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 <div class="value">${totals.opposed ?? 0}</div>
             </div>
 
+            <div class="total-card orange">
+                <div class="label">مسافر</div>
+                <div class="value">${totals.traveling ?? 0}</div>
+            </div>
+
             <div class="total-card gray">
                 <div class="label">غير معروف</div>
                 <div class="value">${totals.unknown ?? 0}</div>
@@ -956,6 +976,67 @@ document.addEventListener('DOMContentLoaded', function () {
             cb.checked = true;
         }
     });
+
+    // =========================
+    // Family Search dropdown (Bonus)
+    // =========================
+    const familyInput = document.getElementById('family-search');
+    const familyResults = document.getElementById('family-results');
+    const familyHidden = document.getElementById('family-value');
+
+    let familyList = @json($families);
+
+    if (familyInput) {
+
+        familyInput.addEventListener('input', function () {
+
+            const query = this.value.toLowerCase().trim();
+
+            if (!query) {
+                familyResults.innerHTML = '';
+                familyResults.classList.remove('open');
+                familyHidden.value = '';
+                liveSearch();
+                return;
+            }
+
+            const filtered = familyList
+                .filter(f => f.toLowerCase().includes(query))
+                .slice(0, 20);
+
+            if (!filtered.length) {
+                familyResults.innerHTML = '<div class="family-empty">لا يوجد نتائج</div>';
+            } else {
+                familyResults.innerHTML = filtered.map(f => `
+                    <div class="family-item" data-value="${f}">
+                        ${f}
+                    </div>
+                `).join('');
+            }
+
+            familyResults.classList.add('open');
+        });
+
+        familyResults.addEventListener('click', function (e) {
+            const item = e.target.closest('.family-item');
+            if (!item) return;
+
+            const value = item.dataset.value;
+
+            familyInput.value = value;
+            familyHidden.value = value;
+
+            familyResults.classList.remove('open');
+
+            liveSearch(); // 🔥 مهم
+        });
+
+        document.addEventListener('click', function (e) {
+            if (!e.target.closest('.family-search-wrapper')) {
+                familyResults.classList.remove('open');
+            }
+        });
+    }
 
 });
 </script>
@@ -1083,6 +1164,10 @@ document.addEventListener('DOMContentLoaded', function () {
     background:#fee2e2;
     color:#991b1b;
 }
+.status-traveling{
+    background:#ffedd5;
+    color:#9a3412;
+}
 
 .status-unknown{
     background:#f3f4f6;
@@ -1132,6 +1217,7 @@ kbd{
 .total-card.yellow{ background:#fef3c7; }
 .total-card.red{ background:#fee2e2; }
 .total-card.gray{ background:#f3f4f6; }
+.total-card.orange{ background:#ffedd5; }
 
 .top-bar{
     display:flex;
@@ -1293,6 +1379,54 @@ kbd{
 
 .advanced-filters label:hover {
     background:#eef2ff;
+}
+
+/* Family Search */
+.family-search-wrapper {
+    position: relative;
+    min-width: 200px;
+}
+
+.family-search-wrapper input {
+    width: 100%;
+    padding: 8px;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+}
+
+.family-results {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 999;
+
+    max-height: 250px;
+    overflow-y: auto;
+
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+}
+
+.family-results.open {
+    display: block;
+}
+
+.family-item {
+    padding: 8px 10px;
+    cursor: pointer;
+}
+
+.family-item:hover {
+    background: #eff6ff;
+}
+
+.family-empty {
+    padding: 10px;
+    color: #999;
 }
 </style>
 
