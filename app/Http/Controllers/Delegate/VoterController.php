@@ -14,20 +14,8 @@ class VoterController extends Controller
     {
         $user = Auth::user();
 
-        $query = Voter::where('polling_center_id', $user->polling_center_id);
-
-        if ($request->filled('search')) {
-
-            $search = trim($request->search);
-
-            $query->where(function ($q) use ($search) {
-
-                $q->where('full_name', 'like', "%{$search}%")
-                  ->orWhere('national_id', 'like', "%{$search}%")
-                  ->orWhere('voter_no', $search);
-
-            });
-        }
+        $query = Voter::visibleTo($user)
+            ->search($request->search);
 
         $voters = $query
             ->orderBy('full_name')
@@ -51,10 +39,14 @@ class VoterController extends Controller
         |--------------------------------------------------------------------------
         */
 
-        $voter = Voter::where('polling_center_id', $user->polling_center_id)
+        $voter = Voter::visibleTo($user)
             ->where('id', $voterId)
             ->firstOrFail();
 
+        // 🔒 strict ownership
+        if ($voter->assigned_delegate_id !== $user->id) {
+            abort(403);
+        }
 
         if ($voter->is_voted) {
 
@@ -82,5 +74,17 @@ class VoterController extends Controller
         ]);
 
         return view('admin.voters.show', compact('voter'));
+    }
+
+    public function search(Request $request)
+    {
+        $user = auth()->user();
+
+        $voters = Voter::visibleTo($user)
+            ->search($request->search)
+            ->limit(20)
+            ->get();
+
+        return response()->json($voters);
     }
 }

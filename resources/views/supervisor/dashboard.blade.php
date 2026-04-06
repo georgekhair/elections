@@ -4,6 +4,17 @@
 
 <h1>لوحة مشرف المركز</h1>
 
+<div style="
+    display:inline-block;
+    background:#eef2ff;
+    padding:6px 12px;
+    border-radius:8px;
+    font-size:13px;
+    margin-bottom:12px;
+">
+    📍 {{ $centerName }}
+</div>
+
 <div class="metrics-grid">
 
 <div class="metric">

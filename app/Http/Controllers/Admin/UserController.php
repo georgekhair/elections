@@ -8,6 +8,8 @@ use App\Models\PollingCenter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Role;
+use App\Models\Voter;
+use App\Services\VoterAssignmentService;
 
 class UserController extends Controller
 {
@@ -23,10 +25,10 @@ class UserController extends Controller
         $centers = PollingCenter::all();
         $roles = Role::pluck('name');
 
-        return view('admin.users.create', compact('centers','roles'));
+        return view('admin.users.create', compact('centers', 'roles'));
     }
 
-    public function store(Request $request)
+    public function store(Request $request, VoterAssignmentService $assignmentService)
     {
         $request->validate([
             'name' => 'required',
@@ -47,8 +49,11 @@ class UserController extends Controller
 
         $user->syncRoles([$request->role]);
 
+        // 🔥 future-proof (safe even if no voters yet)
+        $assignmentService->syncUserRoleAssignments($user);
+
         return redirect()->route('admin.users.index')
-            ->with('success','تم إنشاء المستخدم بنجاح');
+            ->with('success', 'تم إنشاء المستخدم بنجاح');
     }
 
     public function edit(User $user)
@@ -56,18 +61,22 @@ class UserController extends Controller
         $centers = PollingCenter::all();
         $roles = Role::pluck('name');
 
-        return view('admin.users.edit', compact('user','centers','roles'));
+        return view('admin.users.edit', compact('user', 'centers', 'roles'));
     }
 
-    public function update(Request $request, User $user)
+    public function update(Request $request, User $user, VoterAssignmentService $assignmentService)
     {
         $request->validate([
             'name' => 'required',
-            'email' => 'required|email|unique:users,email,'.$user->id,
+            'email' => 'required|email|unique:users,email,' . $user->id,
             'role' => 'required',
             'phone' => 'nullable|string|max:30',
         ]);
 
+        // 🟢 Step 1: store old role
+        $oldRole = $user->getRoleNames()->first();
+
+        // 🟢 Step 2: update user data
         $user->update([
             'name' => $request->name,
             'email' => $request->email,
@@ -76,17 +85,39 @@ class UserController extends Controller
             'is_active' => $request->is_active ?? false,
         ]);
 
+        // 🟢 Step 3: password update
         if ($request->filled('password')) {
             $user->update([
                 'password' => Hash::make($request->password)
             ]);
         }
 
+        // 🟢 Step 4: update role
         $user->syncRoles([$request->role]);
 
+        // 🔥 Step 5: sync voters ONLY if role changed
+        if ($oldRole !== $request->role) {
+            $assignmentService->syncUserRoleAssignments($user);
+        }
+
         return redirect()->route('admin.users.index')
-            ->with('success','تم تحديث المستخدم');
+            ->with('success', 'تم تحديث المستخدم');
     }
+
+    public function updateRole(Request $request, User $user, VoterAssignmentService $assignmentService)
+    {
+        $oldRole = $user->getRoleNames()->first();
+        $newRole = $request->role;
+
+        $user->syncRoles([$newRole]);
+
+        if ($oldRole !== $newRole) {
+            $assignmentService->syncUserRoleAssignments($user);
+        }
+
+        return back()->with('success', 'تم تحديث الدور');
+    }
+
     public function destroy(User $user)
     {
         // ❌ لا تحذف نفسك
@@ -99,18 +130,22 @@ class UserController extends Controller
         }
 
         // 1. فك ارتباط الناخبين
-        \App\Models\Voter::where('assigned_delegate_id', $user->id)
-            ->update(['assigned_delegate_id' => null]);
+        Voter::where('assigned_user_id', $user->id)
+            ->update([
+                'assigned_user_id' => null,
+                'assigned_delegate_id' => null,
+                'supervisor_id' => null,
+            ]);
 
-        \App\Models\Voter::where('voted_by', $user->id)
+        Voter::where('voted_by', $user->id)
             ->update(['voted_by' => null]);
 
         // 2. فك ارتباط المهام (إذا موجودة)
-        if (class_exists(\App\Models\FieldTask::class)) {
+        if (class_exists(FieldTask::class)) {
             \App\Models\FieldTask::where('user_id', $user->id)
                 ->update(['user_id' => null]);
 
-            \App\Models\FieldTask::where('created_by', $user->id)
+            FieldTask::where('created_by', $user->id)
                 ->update(['created_by' => null]);
         }
 

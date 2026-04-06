@@ -22,6 +22,7 @@ class User extends Authenticatable implements FilamentUser
         'device_fingerprint',
         'is_active',
         'last_login_at',
+        'supervisor_id',
     ];
 
     protected $hidden = [
@@ -56,7 +57,7 @@ class User extends Authenticatable implements FilamentUser
 
     /*
     |--------------------------------------------------------------------------
-    | Polling Center Relationship
+    | Polling Center
     |--------------------------------------------------------------------------
     */
 
@@ -90,6 +91,70 @@ class User extends Authenticatable implements FilamentUser
     {
         return $this->hasRole('delegate');
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Hierarchy (FINAL VERSION)
+    |--------------------------------------------------------------------------
+    */
+
+    public function supervisor()
+    {
+        return $this->belongsTo(User::class, 'supervisor_id');
+    }
+
+    public function delegates()
+    {
+        return $this->hasMany(User::class, 'supervisor_id');
+    }
+
+    public function hasSupervisor(): bool
+    {
+        return !is_null($this->supervisor_id);
+    }
+
+    public function hasDelegates(): bool
+    {
+        return $this->delegates()->exists();
+    }
+
+    public function isUnder(User $supervisor): bool
+    {
+        return $this->supervisor_id === $supervisor->id;
+    }
+
+    public function allDelegateIds(): array
+    {
+        return $this->delegates()->pluck('id')->toArray();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Voters Relationships
+    |--------------------------------------------------------------------------
+    */
+
+    public function assignedVoters()
+    {
+        return $this->hasMany(Voter::class, 'assigned_user_id');
+    }
+
+    public function delegatedVoters()
+    {
+        return $this->hasMany(Voter::class, 'assigned_delegate_id');
+    }
+
+    public function supervisedVoters()
+    {
+        return $this->hasMany(Voter::class, 'supervisor_id');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Tasks
+    |--------------------------------------------------------------------------
+    */
+
     public function assignedTasks()
     {
         return $this->hasMany(FieldTask::class, 'user_id');

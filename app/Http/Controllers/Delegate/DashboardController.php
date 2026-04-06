@@ -14,17 +14,17 @@ class DashboardController extends Controller
 
         $centerId = $user->polling_center_id;
 
-        $totalVoters = Voter::where('polling_center_id', $centerId)->count();
+        $totalVoters = Voter::visibleTo($user)->count();
 
-        $voted = Voter::where('polling_center_id', $centerId)
+        $voted = Voter::visibleTo($user)
             ->where('is_voted', true)
             ->count();
 
-        $supporters = Voter::where('polling_center_id', $centerId)
+        $supporters = Voter::visibleTo($user)
             ->where('support_status', 'supporter')
             ->count();
 
-        $supportersVoted = Voter::where('polling_center_id', $centerId)
+        $supportersVoted = Voter::visibleTo($user)
             ->where('support_status', 'supporter')
             ->where('is_voted', true)
             ->count();

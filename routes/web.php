@@ -26,6 +26,8 @@ use App\Http\Controllers\Admin\VoterImportController;
 use App\Http\Controllers\Operations\DataValidationController;
 use App\Http\Controllers\Admin\VoterNoteController;
 use App\Http\Controllers\Admin\VoterRelationshipController;
+use App\Http\Controllers\Admin\UserHierarchyController;
+
 /*
 |--------------------------------------------------------------------------
 | Public Routes
@@ -71,6 +73,9 @@ Route::middleware(['auth', 'role:delegate'])
             ->name('delegate.voters.mark');
         Route::get('/field/targets', [TargetController::class, 'index'])
             ->name('field.targets');
+
+        Route::get('/voters/search', [VoterController::class, 'search'])
+            ->name('delegate.voters.search');
     });
 
     Route::middleware(['auth', 'role:supervisor|delegate'])
@@ -82,21 +87,10 @@ Route::middleware(['auth', 'role:delegate'])
 
         });
 
-    Route::get('/targets', [\App\Http\Controllers\Field\TargetController::class, 'index'])
+    Route::get('/targets', [TargetController::class, 'index'])
         ->name('field.targets');
 
-    Route::post('/voters/{voter}/vote', function ($voterId) {
 
-        $voter = \App\Models\Voter::findOrFail($voterId);
-
-        $voter->update([
-            'is_voted' => true,
-            'voted_at' => now(),
-            'voted_by' => auth()->id()
-        ]);
-
-        return response()->json(['success'=>true]);
-    });
 
     Route::post('/voters/{voter}/contacted', function ($voterId) {
 
@@ -121,6 +115,12 @@ Route::middleware(['auth', 'role:supervisor'])
         // NEW
         Route::get('/delegates/{delegate}/voters', [SupervisorDashboardController::class, 'delegateVoters'])
             ->name('supervisor.delegate.voters');
+
+        Route::post('/voters/{voter}/mark', [SupervisorDashboardController::class, 'markVoted'])
+            ->name('supervisor.voters.mark');
+
+        Route::get('/voters', [SupervisorDashboardController::class, 'voters'])
+            ->name('supervisor.voters');
     });
 
 /*
@@ -262,6 +262,15 @@ Route::middleware(['auth', 'role:admin'])
 
         Route::post('/voters/import/{run}/status-confirm', [VoterImportController::class, 'confirmStatusUpdate'])
             ->name('voters.import.status.confirm');
+
+        Route::get('/user-hierarchy', [UserHierarchyController::class, 'index'])
+            ->name('user-hierarchy.index');
+
+        Route::post('/user-hierarchy/assign', [UserHierarchyController::class, 'assign'])
+            ->name('user-hierarchy.assign');
+
+        Route::post('/user-hierarchy/move', [UserHierarchyController::class, 'move'])
+            ->name('user-hierarchy.move');
     });
 
 require __DIR__.'/auth.php';

@@ -1,52 +1,37 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-<meta charset="UTF-8">
-<title>لوحة المندوب</title>
+@extends('layouts.admin')
 
-<style>
+@section('content')
 
-body{
-font-family:Tahoma;
-background:#f4f6f9;
-padding:30px;
-}
+<h1>لوحة المندوب</h1>
 
-.card{
-background:white;
-padding:20px;
-margin-bottom:15px;
-border-radius:10px;
-box-shadow:0 1px 3px rgba(0,0,0,0.1);
-}
+<div class="metrics-grid">
 
-</style>
+    <div class="card">
+        إجمالي الناخبين في المركز<br>
+        <b>{{ $totalVoters }}</b>
+    </div>
 
-</head>
+    <div class="card">
+        تم تسجيل اقتراعهم<br>
+        <b>{{ $voted }}</b>
+    </div>
 
-<body>
+    <div class="card">
+        الناخبين المضمونين<br>
+        <b>{{ $supporters }}</b>
+    </div>
 
-<h2>لوحة المندوب</h2>
+    <div class="card">
+        المضمونين الذين صوتوا<br>
+        <b>{{ $supportersVoted }}</b>
+    </div>
 
-<div class="card">
-إجمالي الناخبين في المركز: {{ $totalVoters }}
 </div>
 
-<div class="card">
-تم تسجيل اقتراعهم: {{ $voted }}
+<div style="margin-top:20px;">
+    <a href="{{ route('delegate.voters') }}" class="btn btn-primary">
+        🔍 البحث عن ناخب
+    </a>
 </div>
 
-<div class="card">
-الناخبين المضمونين: {{ $supporters }}
-</div>
-
-<div class="card">
-المضمونين الذين صوتوا: {{ $supportersVoted }}
-</div>
-
-<a href="{{ route('delegate.voters') }}">
-<button>البحث عن ناخب</button>
-</a>
-
-</body>
-</html>
+@endsection

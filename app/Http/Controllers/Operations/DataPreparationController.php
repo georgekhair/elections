@@ -7,12 +7,14 @@ use App\Models\PollingCenter;
 use App\Models\User;
 use App\Models\Voter;
 use Illuminate\Http\Request;
+use App\Services\VoterAssignmentService;
 
 class DataPreparationController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Voter::with(['delegate', 'supervisor', 'pollingCenter'])
+        $query = Voter::visibleTo(auth()->user())
+            ->with(['delegate', 'supervisor','assignedUser', 'pollingCenter'])
             ->withCount([
                 'voterNotes',
                 'relationships',
@@ -57,7 +59,8 @@ class DataPreparationController extends Controller
     public function search(Request $request)
     {
         try {
-            $query = Voter::with(['delegate', 'supervisor', 'pollingCenter'])
+            $query = Voter::visibleTo(auth()->user())
+                ->with(['delegate', 'supervisor', 'assignedUser', 'pollingCenter'])
                 ->withCount([
                     'voterNotes',
                     'relationships',
@@ -89,8 +92,12 @@ class DataPreparationController extends Controller
         }
     }
 
-    public function update(Request $request, Voter $voter)
+    public function update(Request $request, Voter $voter, VoterAssignmentService $assignmentService)
     {
+        if (!$voter->newQuery()->visibleTo(auth()->user())->where('id', $voter->id)->exists()) {
+            abort(403);
+        }
+
         $request->validate([
             'support_status' => 'nullable|in:supporter,leaning,undecided,opposed,unknown,traveling',
             'priority_level' => 'nullable|in:high,medium,low',
@@ -100,20 +107,11 @@ class DataPreparationController extends Controller
         $data = [];
 
         if ($request->has('assigned_delegate_id')) {
-            $value = trim((string) $request->assigned_delegate_id);
+            $payload = $assignmentService->buildPayloadFromSelectionValue(
+                (string) $request->assigned_delegate_id
+            );
 
-            if ($value === '') {
-                $data['assigned_delegate_id'] = null;
-                $data['supervisor_id'] = null;
-            } elseif (str_starts_with($value, 'supervisor_')) {
-                $supervisorId = (int) str_replace('supervisor_', '', $value);
-
-                $data['supervisor_id'] = $supervisorId;
-                $data['assigned_delegate_id'] = null;
-            } else {
-                $data['assigned_delegate_id'] = (int) $value;
-                $data['supervisor_id'] = null;
-            }
+            $data = array_merge($data, $payload);
         }
 
         if ($request->filled('support_status')) {
@@ -132,7 +130,7 @@ class DataPreparationController extends Controller
         ]);
     }
 
-    public function bulkAssign(Request $request)
+    public function bulkAssign(Request $request, VoterAssignmentService $assignmentService)
     {
         $request->validate([
             'voter_ids' => [
@@ -143,7 +141,7 @@ class DataPreparationController extends Controller
                     }
                 },
             ],
-            'assigned_delegate_id' => 'nullable|exists:users,id',
+            'assigned_delegate_id' => 'nullable',
             'supervisor_id' => 'nullable|exists:users,id',
         ]);
 
@@ -152,86 +150,24 @@ class DataPreparationController extends Controller
         }
 
         if ($request->voter_ids === 'ALL') {
-
             $query = Voter::query();
-
-            // 🔥 apply SAME filters as search/index
-            if ($request->center_id) {
-                $query->where('polling_center_id', $request->center_id);
-            }
-
-            if ($request->status) {
-                $query->where('support_status', $request->status);
-            }
-
-            if ($request->priority) {
-                $query->where('priority_level', $request->priority);
-            }
-
-            // ✅ FAMILY FILTER
-            if ($request->family_name) {
-                $query->where('family_name', $request->family_name);
-            }
-
-            if ($request->delegate_id) {
-                $delegateFilter = (string) $request->delegate_id;
-
-                if (str_starts_with($delegateFilter, 'supervisor_')) {
-                    $query->where('supervisor_id', str_replace('supervisor_', '', $delegateFilter));
-                } else {
-                    $query->where('assigned_delegate_id', $delegateFilter);
-                }
-            }
-
-            if ($request->unassigned) {
-                $query->whereNull('assigned_delegate_id');
-            }
-
-            if ($request->target) {
-                $query->where(function ($q) {
-                    $q->whereIn('support_status', ['leaning', 'undecided'])
-                    ->orWhere(function ($qq) {
-                        $qq->where('support_status', 'supporter')
-                            ->where('priority_level', 'high');
-                    });
-                });
-            }
-
-            if ($request->name) {
-                $words = array_filter(explode(' ', trim($request->name)));
-
-                $query->where(function ($q) use ($words) {
-                    foreach ($words as $word) {
-                        $q->where(function ($qq) use ($word) {
-                            $qq->where('full_name', 'like', "%$word%")
-                            ->orWhere('national_id', 'like', "%$word%");
-                        });
-                    }
-                });
-            }
-
+            $this->applyBulkFilters($query, $request);
             $ids = $query->pluck('id');
-
         } else {
             $ids = $request->voter_ids;
         }
 
+        $selectionValue = '';
+
         if ($request->filled('supervisor_id')) {
-
-            Voter::whereIn('id', $ids)->update([
-                'supervisor_id' => $request->supervisor_id,
-                'assigned_delegate_id' => null,
-            ]);
-
-        } else {
-
-            Voter::whereIn('id', $ids)->update([
-                'assigned_delegate_id' => $request->assigned_delegate_id,
-                'supervisor_id' => null,
-            ]);
+            $selectionValue = 'supervisor_' . $request->supervisor_id;
+        } elseif ($request->filled('assigned_delegate_id')) {
+            $selectionValue = (string) $request->assigned_delegate_id;
         }
 
-        return back()->with('success', 'تم توزيع الناخبين على المندوب بنجاح');
+        $assignmentService->bulkAssignBySelectionValue($ids, $selectionValue);
+
+        return back()->with('success', 'تم توزيع الناخبين بنجاح');
     }
 
     public function bulkStatus(Request $request)
@@ -327,6 +263,90 @@ class DataPreparationController extends Controller
         return back()->with('success', 'تم تحديث الناخبين المحددين بنجاح');
     }
 
+    private function applyBulkFilters($query, Request $request): void
+    {
+        if ($request->center_id) {
+            $query->where('polling_center_id', $request->center_id);
+        }
+
+        if ($request->status) {
+            $query->where('support_status', $request->status);
+        }
+
+        if ($request->priority) {
+            $query->where('priority_level', $request->priority);
+        }
+
+        if ($request->family_name) {
+            $query->where('family_name', $request->family_name);
+        }
+
+        if ($request->delegate_id) {
+            $delegateFilter = (string) $request->delegate_id;
+
+            if (str_starts_with($delegateFilter, 'supervisor_')) {
+                $query->where('supervisor_id', str_replace('supervisor_', '', $delegateFilter));
+            } else {
+                $query->where('assigned_delegate_id', $delegateFilter);
+            }
+        }
+
+        if ($request->unassigned) {
+            $query->whereNull('assigned_delegate_id')
+                ->whereNull('supervisor_id')
+                ->whereNull('assigned_user_id');
+        }
+
+        if ($request->target) {
+            $query->where(function ($q) {
+                $q->whereIn('support_status', ['leaning', 'undecided'])
+                ->orWhere(function ($qq) {
+                    $qq->where('support_status', 'supporter')
+                        ->where('priority_level', 'high');
+                });
+            });
+        }
+
+        if ($request->name) {
+            $words = array_filter(explode(' ', trim($request->name)));
+
+            $query->where(function ($q) use ($words) {
+                foreach ($words as $word) {
+                    $q->where(function ($qq) use ($word) {
+                        $qq->where('full_name', 'like', "%{$word}%")
+                        ->orWhere('national_id', 'like', "%{$word}%");
+                    });
+                }
+            });
+        }
+
+        if ($request->boolean('has_notes')) {
+            $query->has('voterNotes');
+        }
+
+        if ($request->boolean('needs_action')) {
+            $query->whereHas('voterNotes', function ($q) {
+                $q->where('requires_action', 1);
+            });
+        }
+
+        if ($request->boolean('high_priority_notes')) {
+            $query->whereHas('voterNotes', function ($q) {
+                $q->where('priority', 'high');
+            });
+        }
+
+        if ($request->boolean('has_relationships')) {
+            $query->has('relationships');
+        }
+
+        if ($request->boolean('has_influencer')) {
+            $query->whereHas('relationships', function ($q) {
+                $q->where('is_primary_influencer', 1);
+            });
+        }
+    }
+
     private function applyFilters($query, Request $request, $withRanking = true): void
     {
         if ($request->filled('center_id')) {
@@ -345,15 +365,19 @@ class DataPreparationController extends Controller
             $query->where('family_name', $request->family_name);
         }
         if ($request->boolean('unassigned')) {
-            $query->whereNull('assigned_delegate_id');
-        }
-        elseif ($request->filled('delegate_id')) {
+            $query->whereNull('assigned_delegate_id')
+                ->whereNull('supervisor_id')
+                ->whereNull('assigned_user_id');
+        } elseif ($request->filled('delegate_id')) {
             $value = (string) $request->delegate_id;
 
             if (str_starts_with($value, 'supervisor_')) {
                 $query->where('supervisor_id', str_replace('supervisor_', '', $value));
             } else {
-                $query->where('assigned_delegate_id', $value);
+                $query->where(function ($q) use ($value) {
+                    $q->where('assigned_delegate_id', $value)
+                    ->orWhere('assigned_user_id', $value);
+                });
             }
         }
 

@@ -2,7 +2,7 @@
 
 @section('content')
 
-<h1>🚀 وضع الاقتراع السريع</h1>
+<h1>🚀 وضع الاقتراع السريع - المشرف</h1>
 
 <input
     type="text"
@@ -28,18 +28,26 @@ document.getElementById('search').addEventListener('input', function() {
 
     let query = this.value;
 
-    if(query.length < 2){
+    if(query.length < 1){
         document.getElementById('results').innerHTML = '';
         return;
     }
 
     timer = setTimeout(() => {
 
-        fetch(`{{ route('delegate.voters.search') }}?search=${query}`)
+        fetch(`{{ route('supervisor.voters') }}?search=${query}`, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
         .then(res => res.json())
         .then(data => {
 
             let html = '';
+
+            if(data.length === 0){
+                html = '<div class="card">لا يوجد نتائج</div>';
+            }
 
             data.forEach(voter => {
 
@@ -47,10 +55,19 @@ document.getElementById('search').addEventListener('input', function() {
                     <div class="voter-card">
                         <div class="name">${voter.full_name}</div>
                         <div class="meta">${voter.national_id}</div>
+                        <div class="meta">📍 ${voter.polling_center?.name ?? ''}</div>
+
+                        <div class="meta">
+                            👤 ${
+                                voter.assigned_delegate
+                                ? voter.assigned_delegate.name
+                                : 'بدون مندوب'
+                            }
+                        </div>
 
                         ${
                             voter.is_voted
-                            ? '<div class="voted">✔ تم الاقتراع</div>'
+                            ? `<div class="voted">✔ تم الاقتراع</div>`
                             : `<button onclick="vote(${voter.id})" class="vote-btn">اقتراع</button>`
                         }
                     </div>
@@ -62,14 +79,14 @@ document.getElementById('search').addEventListener('input', function() {
 
         });
 
-    }, 300); // debounce
+    }, 250);
 
 });
 
 
 function vote(id){
 
-    fetch(`/delegate/voters/${id}/mark`, {
+    fetch(`/supervisor/voters/${id}/mark`, {
         method: 'POST',
         headers: {
             'X-CSRF-TOKEN': '{{ csrf_token() }}'

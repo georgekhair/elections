@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
+use App\Services\UserHierarchyService;
 
 class Voter extends Model
 {
@@ -19,17 +21,13 @@ class Voter extends Model
         'priority_level',
         'assigned_delegate_id',
         'supervisor_id',
+        'assigned_user_id',
         'support_status',
         'is_voted',
         'voted_at',
         'voted_by',
         'notes',
     ];
-
-    public function delegate()
-    {
-        return $this->belongsTo(User::class, 'assigned_delegate_id');
-    }
 
     protected function casts(): array
     {
@@ -49,26 +47,24 @@ class Voter extends Model
         return $this->belongsTo(User::class, 'voted_by');
     }
 
-    // مفيد لاحقاً للعرض بالعربي
-    public function getSupportStatusLabelAttribute(): string
+    public function delegate()
     {
-        return match ($this->support_status) {
-            'supporter' => 'مضمون',
-            'leaning' => 'يميل',
-            'neutral' => 'محايد',
-            'opposed' => 'ضد',
-            'traveling' => 'سافر',
-            default => 'غير معروف',
-        };
+        return $this->belongsTo(User::class, 'assigned_delegate_id');
     }
-    public function scopeTarget($query)
+
+    public function assignedDelegate()
     {
-        return $query->whereIn('support_status', ['undecided', 'leaning'])
-            ->orWhere(function ($q) {
-                $q->where('support_status', 'supporter')
-                ->where('is_voted', false)
-                ->where('priority_level', 'high');
-            });
+        return $this->belongsTo(User::class, 'assigned_delegate_id');
+    }
+
+    public function supervisor()
+    {
+        return $this->belongsTo(User::class, 'supervisor_id');
+    }
+
+    public function assignedUser()
+    {
+        return $this->belongsTo(User::class, 'assigned_user_id');
     }
 
     public function voterNotes()
@@ -98,13 +94,127 @@ class Voter extends Model
         return $this->hasMany(VoterRelationship::class, 'related_voter_id');
     }
 
-    public function assignedDelegate()
+    public function getSupportStatusLabelAttribute(): string
     {
-        return $this->belongsTo(User::class, 'assigned_delegate_id');
+        return match ($this->support_status) {
+            'supporter' => 'مضمون',
+            'leaning' => 'يميل',
+            'undecided' => 'متردد',
+            'opposed' => 'ضد',
+            'traveling' => 'مسافر',
+            default => 'غير معروف',
+        };
     }
 
-    public function supervisor()
+    public function getCurrentAssigneeAttribute(): ?User
     {
-        return $this->belongsTo(User::class, 'supervisor_id');
+        if ($this->relationLoaded('assignedUser') && $this->assignedUser) {
+            return $this->assignedUser;
+        }
+
+        if ($this->relationLoaded('delegate') && $this->delegate) {
+            return $this->delegate;
+        }
+
+        if ($this->relationLoaded('supervisor') && $this->supervisor) {
+            return $this->supervisor;
+        }
+
+        return $this->assignedUser ?? $this->delegate ?? $this->supervisor;
+    }
+
+    public function getCurrentAssigneeTypeAttribute(): ?string
+    {
+        if ($this->assigned_delegate_id) {
+            return 'delegate';
+        }
+
+        if ($this->supervisor_id) {
+            return 'supervisor';
+        }
+
+        if ($this->assigned_user_id && $this->assignedUser) {
+            return $this->assignedUser->hasRole('supervisor') ? 'supervisor' : 'delegate';
+        }
+
+        return null;
+    }
+
+    public function scopeTarget(Builder $query): Builder
+    {
+        return $query->whereIn('support_status', ['undecided', 'leaning'])
+            ->orWhere(function ($q) {
+                $q->where('support_status', 'supporter')
+                    ->where('is_voted', false)
+                    ->where('priority_level', 'high');
+            });
+    }
+
+    public function scopeVisibleTo($query, User $user)
+    {
+        // ADMIN → sees everything
+        if ($user->hasRole('admin')) {
+            return $query;
+        }
+
+        // OPERATIONS → sees everything
+        if ($user->hasRole('operations')) {
+            return $query;
+        }
+
+        // SUPERVISOR
+        if ($user->hasRole('supervisor')) {
+
+            $delegateIds = $user->delegates()->pluck('id');
+
+            return $query->where(function ($q) use ($user, $delegateIds) {
+                $q->where('supervisor_id', $user->id)
+                ->orWhereIn('assigned_delegate_id', $delegateIds);
+            });
+        }
+
+        // DELEGATE
+        if ($user->hasRole('delegate')) {
+            return $query->where('assigned_delegate_id', $user->id);
+        }
+
+        // fallback → nothing
+        return $query->whereRaw('1=0');
+    }
+    public function votedByUser()
+    {
+        return $this->belongsTo(User::class, 'voted_by');
+    }
+    public function scopeSearch($query, $search)
+    {
+        if (!$search) {
+            return $query;
+        }
+
+        $search = trim($search);
+
+        // normalize Arabic
+        $search = str_replace(['أ','إ','آ'], 'ا', $search);
+
+        $terms = preg_split('/\s+/', $search);
+
+        return $query->where(function ($q) use ($terms, $search) {
+
+            // ID search
+            if (is_numeric($search)) {
+                $q->orWhere('national_id', 'like', "%{$search}%")
+                ->orWhere('voter_no', $search);
+            }
+
+            foreach ($terms as $term) {
+                $q->where(function ($sub) use ($term) {
+                    $sub->where('first_name', 'like', "%{$term}%")
+                        ->orWhere('father_name', 'like', "%{$term}%")
+                        ->orWhere('grandfather_name', 'like', "%{$term}%")
+                        ->orWhere('family_name', 'like', "%{$term}%")
+                        ->orWhere('full_name', 'like', "%{$term}%");
+                });
+            }
+        });
     }
 }
