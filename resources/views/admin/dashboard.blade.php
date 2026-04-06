@@ -52,5 +52,36 @@
 @endforeach
 
 </div>
+<h2>📡 التواصل مع المندوبين</h2>
 
+@foreach($delegates as $delegate)
+
+<div class="card">
+
+    <strong>{{ $delegate['name'] }}</strong><br>
+
+    📍 {{ $delegate['center'] }}<br>
+
+    📊 {{ $delegate['votes'] }} / {{ $delegate['assigned'] }}
+    ({{ $delegate['rate'] }}%)
+
+    <div class="actions">
+
+        <a href="{{ $delegate['whatsapp_summary'] }}" target="_blank" class="btn btn-success">
+            📱 تقرير
+        </a>
+
+        <a href="{{ $delegate['whatsapp_alert'] }}" target="_blank" class="btn btn-warning">
+            ⚠️ تنبيه
+        </a>
+
+        <a href="tel:{{ $delegate['phone'] }}" class="btn btn-primary">
+            📞 اتصال
+        </a>
+
+    </div>
+
+</div>
+
+@endforeach
 @endsection

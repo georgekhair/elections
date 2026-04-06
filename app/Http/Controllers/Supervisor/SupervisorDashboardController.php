@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Auth;
 use App\Models\Voter;
 use App\Models\User;
 use Illuminate\Http\Request;
+use App\Services\CommunicationService;
 
 class SupervisorDashboardController extends Controller
 {
@@ -16,6 +17,7 @@ class SupervisorDashboardController extends Controller
 
         $centerId = $user->polling_center_id;
         $centerName = $user->pollingCenter->name ?? '—';
+
         /*
         |--------------------------------------------------------------------------
         | Voters Statistics
@@ -98,6 +100,7 @@ class SupervisorDashboardController extends Controller
 
         $leaderboard = $delegates->map(function ($delegate) use ($delegateAssigned, $delegateActivity, $delegateLastActivity) {
 
+            $communication = app(CommunicationService::class);
             $assigned = (int) ($delegateAssigned[$delegate->id] ?? 0);
             $votes = (int) ($delegateActivity[$delegate->id] ?? 0);
 
@@ -113,6 +116,15 @@ class SupervisorDashboardController extends Controller
                 'votes' => $votes,
                 'rate' => $rate,
                 'last_activity' => $delegateLastActivity[$delegate->id] ?? null,
+                'whatsapp_summary' => $communication->whatsappLink(
+                    $delegate->phone,
+                    $communication->delegateSummaryMessage($delegate, $assigned, $votes)
+                ),
+
+                'whatsapp_alert' => $communication->whatsappLink(
+                    $delegate->phone,
+                    $communication->lowTurnoutAlert($delegate)
+                ),
             ];
 
         })

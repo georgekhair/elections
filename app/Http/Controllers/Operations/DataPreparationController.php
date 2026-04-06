@@ -14,7 +14,19 @@ class DataPreparationController extends Controller
     public function index(Request $request)
     {
         $query = Voter::visibleTo(auth()->user())
-            ->with(['delegate', 'supervisor','assignedUser', 'pollingCenter'])
+            ->with([
+                'delegate',
+                'supervisor',
+                'assignedUser',
+                'pollingCenter',
+
+                // 🔥 إضافة الملاحظات
+                'voterNotes' => function ($q) {
+                    $q->latest()
+                        ->select('id', 'voter_id', 'content', 'note_type', 'priority', 'requires_action', 'created_at')
+                        ->take(3);
+                }
+            ])
             ->withCount([
                 'voterNotes',
                 'relationships',
@@ -60,7 +72,18 @@ class DataPreparationController extends Controller
     {
         try {
             $query = Voter::visibleTo(auth()->user())
-                ->with(['delegate', 'supervisor', 'assignedUser', 'pollingCenter'])
+                ->with([
+                    'delegate',
+                    'supervisor',
+                    'assignedUser',
+                    'pollingCenter',
+
+                    'voterNotes' => function ($q) {
+                        $q->latest()
+                            ->select('id', 'voter_id', 'content', 'note_type', 'priority', 'requires_action', 'created_at')
+                            ->take(3);
+                    }
+                ])
                 ->withCount([
                     'voterNotes',
                     'relationships',
@@ -207,7 +230,7 @@ class DataPreparationController extends Controller
                     $query->where('priority_level', $request->priority);
                 }
 
-                    // ✅ FAMILY FILTER (NEW)
+                // ✅ FAMILY FILTER (NEW)
                 if ($request->family_name) {
                     $query->where('family_name', $request->family_name);
                 }
@@ -229,10 +252,10 @@ class DataPreparationController extends Controller
                 if ($request->target) {
                     $query->where(function ($q) {
                         $q->whereIn('support_status', ['leaning', 'undecided'])
-                        ->orWhere(function ($qq) {
-                            $qq->where('support_status', 'supporter')
-                                ->where('priority_level', 'high');
-                        });
+                            ->orWhere(function ($qq) {
+                                $qq->where('support_status', 'supporter')
+                                    ->where('priority_level', 'high');
+                            });
                     });
                 }
 
@@ -243,7 +266,7 @@ class DataPreparationController extends Controller
                         foreach ($words as $word) {
                             $q->where(function ($qq) use ($word) {
                                 $qq->where('full_name', 'like', "%$word%")
-                                ->orWhere('national_id', 'like', "%$word%");
+                                    ->orWhere('national_id', 'like', "%$word%");
                             });
                         }
                     });
@@ -300,10 +323,10 @@ class DataPreparationController extends Controller
         if ($request->target) {
             $query->where(function ($q) {
                 $q->whereIn('support_status', ['leaning', 'undecided'])
-                ->orWhere(function ($qq) {
-                    $qq->where('support_status', 'supporter')
-                        ->where('priority_level', 'high');
-                });
+                    ->orWhere(function ($qq) {
+                        $qq->where('support_status', 'supporter')
+                            ->where('priority_level', 'high');
+                    });
             });
         }
 
@@ -314,7 +337,7 @@ class DataPreparationController extends Controller
                 foreach ($words as $word) {
                     $q->where(function ($qq) use ($word) {
                         $qq->where('full_name', 'like', "%{$word}%")
-                        ->orWhere('national_id', 'like', "%{$word}%");
+                            ->orWhere('national_id', 'like', "%{$word}%");
                     });
                 }
             });
@@ -376,7 +399,7 @@ class DataPreparationController extends Controller
             } else {
                 $query->where(function ($q) use ($value) {
                     $q->where('assigned_delegate_id', $value)
-                    ->orWhere('assigned_user_id', $value);
+                        ->orWhere('assigned_user_id', $value);
                 });
             }
         }
@@ -384,10 +407,10 @@ class DataPreparationController extends Controller
         if ($request->boolean('target')) {
             $query->where(function ($q) {
                 $q->whereIn('support_status', ['leaning', 'undecided'])
-                  ->orWhere(function ($qq) {
-                      $qq->where('support_status', 'supporter')
-                         ->where('priority_level', 'high');
-                  });
+                    ->orWhere(function ($qq) {
+                        $qq->where('support_status', 'supporter')
+                            ->where('priority_level', 'high');
+                    });
             });
         }
 
@@ -411,10 +434,11 @@ class DataPreparationController extends Controller
 
                 // word-by-word
                 foreach ($words as $word) {
-                    if (!$word) continue;
+                    if (!$word)
+                        continue;
 
                     $q->orWhere('full_name', 'like', "%{$word}%")
-                    ->orWhereRaw('CAST(national_id AS CHAR) LIKE ?', ["%{$word}%"]);
+                        ->orWhereRaw('CAST(national_id AS CHAR) LIKE ?', ["%{$word}%"]);
                 }
             });
 
@@ -529,7 +553,8 @@ class DataPreparationController extends Controller
 
         // 🔥 individual words match
         foreach ($words as $word) {
-            if (!$word) continue;
+            if (!$word)
+                continue;
 
             $scoreParts[] = "CASE WHEN full_name LIKE ? THEN 30 ELSE 0 END";
             $bindings[] = "%{$word}%";
@@ -578,20 +603,21 @@ class DataPreparationController extends Controller
 
                 // words
                 foreach ($words as $word) {
-                    if (!$word) continue;
+                    if (!$word)
+                        continue;
 
                     $q->orWhere('full_name', 'like', "%{$word}%")
-                    ->orWhere('first_name', 'like', "%{$word}%")
-                    ->orWhere('father_name', 'like', "%{$word}%")
-                    ->orWhere('grandfather_name', 'like', "%{$word}%")
-                    ->orWhere('family_name', 'like', "%{$word}%")
-                    ->orWhere('national_id', 'like', "%{$word}%");
+                        ->orWhere('first_name', 'like', "%{$word}%")
+                        ->orWhere('father_name', 'like', "%{$word}%")
+                        ->orWhere('grandfather_name', 'like', "%{$word}%")
+                        ->orWhere('family_name', 'like', "%{$word}%")
+                        ->orWhere('national_id', 'like', "%{$word}%");
                 }
 
                 // numeric search
                 if (is_numeric($search)) {
                     $q->orWhere('national_id', 'like', "%{$search}%")
-                    ->orWhere('voter_no', $search);
+                        ->orWhere('voter_no', $search);
                 }
             })
 
@@ -600,5 +626,29 @@ class DataPreparationController extends Controller
             ->get();
 
         return response()->json($voters);
+    }
+
+    public function notes(Voter $voter)
+    {
+        // 🔐 مهم: تأكد من الصلاحيات
+        if (!$voter->newQuery()->visibleTo(auth()->user())->where('id', $voter->id)->exists()) {
+            abort(403);
+        }
+
+        return response()->json(
+            $voter->voterNotes()
+                ->latest()
+                ->take(20)
+                ->get()
+                ->map(function ($note) {
+                    return [
+                        'note' => $note->content,
+                        'type' => $note->note_type,
+                        'priority' => $note->priority,
+                        'requires_action' => $note->requires_action,
+                        'created_at' => $note->created_at->diffForHumans(),
+                    ];
+                })
+        );
     }
 }

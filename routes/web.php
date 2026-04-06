@@ -220,7 +220,8 @@ Route::middleware(['auth', 'role:admin|operations'])
         Route::get('/voters/{voter}', [VoterDetailsController::class, 'show'])
             ->name('operations.voters.show');
 
-
+        Route::get('/voters/{voter}/notes', [DataPreparationController::class, 'notes'])
+            ->name('operations.voters.notes');
 
 
     });

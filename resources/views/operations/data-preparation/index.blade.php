@@ -1039,6 +1039,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
 });
+
 </script>
 
 {{-- CSS --}}
@@ -1427,6 +1428,30 @@ kbd{
 .family-empty {
     padding: 10px;
     color: #999;
+}
+.note-header {
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:12px;
+    color:#555;
+    margin-bottom:4px;
+}
+
+.note-icon {
+    font-size:14px;
+}
+
+.note-type {
+    background:#f3f4f6;
+    padding:2px 6px;
+    border-radius:6px;
+    font-weight:600;
+}
+
+.note-text {
+    font-size:14px;
+    margin-bottom:4px;
 }
 </style>
 
