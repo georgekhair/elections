@@ -201,6 +201,7 @@
 <script>
 let map;
 let mapMarkers = [];
+let lastTaskCount = 0;
 
 function initMap() {
     map = L.map('map').setView([31.7035, 35.2200], 14);
@@ -338,7 +339,7 @@ async function refreshCommandCenter() {
         renderDelegates(data.delegates);
         updateTaskBadge(data.user_tasks_count);
 
-        if (data.user_tasks_count > lastTaskCount) {
+        if (lastTaskCount !== null && data.user_tasks_count > lastTaskCount) {
             showNotification('🔴 لديك مهام جديدة!');
         }
         lastTaskCount = data.user_tasks_count;
@@ -454,6 +455,7 @@ function showNotification(message) {
 }
 
 initMap();
+
 refreshCommandCenter();
 setInterval(refreshCommandCenter, 10000);
 

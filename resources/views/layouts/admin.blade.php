@@ -55,6 +55,9 @@
             {{-- Field --}}
             @if(auth()->user()->hasAnyRole(['supervisor', 'delegate']))
                 <a href="{{ route('field.tasks.inbox') }}">مهامي</a>
+                <a href="{{ route('field.targets') }}">
+                    🎯 قائمة المستهدفين
+                </a>
             @endif
 
             {{-- Admin extra --}}

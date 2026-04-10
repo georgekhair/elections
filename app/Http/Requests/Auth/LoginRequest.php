@@ -65,13 +65,13 @@ class LoginRequest extends FormRequest
 
         $incomingFingerprint = (string) $this->input('device_fingerprint', '');
 
-        if (blank($incomingFingerprint)) {
-            Auth::logout();
+        //if (blank($incomingFingerprint)) {
+            //Auth::logout();
 
-            throw ValidationException::withMessages([
-                'email' => 'تعذر التحقق من الجهاز. يرجى المحاولة مرة أخرى.',
-            ]);
-        }
+            //throw ValidationException::withMessages([
+                //'email' => 'تعذر التحقق من الجهاز. يرجى المحاولة مرة أخرى.',
+            //]);
+        //}
 
         // first login: bind the account to this device
         if (blank($user->device_fingerprint)) {

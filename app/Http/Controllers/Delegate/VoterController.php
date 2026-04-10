@@ -10,20 +10,41 @@ use Illuminate\Support\Facades\Auth;
 class VoterController extends Controller
 {
 
-    public function index(Request $request)
-    {
-        $user = Auth::user();
+    public function index()
+{
+    $user = auth()->user();
 
-        $query = Voter::visibleTo($user)
-            ->search($request->search);
+    // ✅ stats
+    $totalVoters = Voter::visibleTo($user)->count();
 
-        $voters = $query
-            ->orderBy('full_name')
-            ->limit(30)
-            ->get();
+    $voted = Voter::visibleTo($user)
+        ->where('is_voted', true)
+        ->count();
 
-        return view('delegate.voters', compact('voters'));
-    }
+    // ✅ priority (اختياري لكن مهم)
+    $priorityVoters = Voter::visibleTo($user)
+        ->where('is_voted', false)
+        ->orderByRaw("
+            CASE
+                WHEN EXISTS (
+                    SELECT 1 FROM voter_notes
+                    WHERE voter_notes.voter_id = voters.id
+                    AND requires_action = 1
+                ) THEN 1
+                WHEN support_status IN ('undecided','leaning') THEN 2
+                WHEN support_status = 'supporter' AND priority_level = 'high' THEN 3
+                ELSE 4
+            END
+        ")
+        ->limit(10)
+        ->get();
+
+    return view('delegate.voters', compact(
+        'totalVoters',
+        'voted',
+        'priorityVoters'
+    ));
+}
 
 
     public function markVoted($voterId)
@@ -45,12 +66,12 @@ class VoterController extends Controller
 
         // 🔒 strict ownership
         if ($voter->assigned_delegate_id !== $user->id) {
-            abort(403);
+            return response()->json(['error' => 'Unauthorized'], 403);
         }
 
         if ($voter->is_voted) {
 
-            return back()->with('error', 'تم تسجيل هذا الناخب مسبقاً.');
+            return response()->json(['error' => 'تم تسجيل هذا الناخب مسبقاً.'], 400);
 
         }
 
@@ -61,7 +82,9 @@ class VoterController extends Controller
         ]);
 
 
-        return back()->with('success', 'تم تسجيل الاقتراع بنجاح.');
+        return response()->json([
+            'success' => true
+        ]);
     }
 
     public function show(Voter $voter)
@@ -84,6 +107,46 @@ class VoterController extends Controller
             ->search($request->search)
             ->limit(20)
             ->get();
+
+        return response()->json($voters);
+    }
+
+    public function priority()
+    {
+        $user = auth()->user();
+
+        $voters = Voter::visibleTo($user)
+            ->where('is_voted', false)
+            ->orderByRaw("
+                CASE
+                    WHEN EXISTS (
+                        SELECT 1 FROM voter_notes
+                        WHERE voter_notes.voter_id = voters.id
+                        AND requires_action = 1
+                    ) THEN 1
+                    WHEN support_status IN ('undecided','leaning') THEN 2
+                    WHEN support_status = 'supporter' AND priority_level = 'high' THEN 3
+                    ELSE 4
+                END
+            ")
+            ->limit(5)
+            ->get()
+            ->map(function ($v) {
+                return [
+                    'id' => $v->id,
+                    'full_name' => $v->full_name,
+                    'support_status' => $v->support_status,
+
+                    // 🔥 هنا الجديد
+                    'issues' => $v->voterNotes->map(function ($note) {
+                        return [
+                            'text' => $note->content,
+                            'type' => $note->note_type,
+                            'priority' => $note->priority,
+                        ];
+                    }),
+                ];
+            });
 
         return response()->json($voters);
     }

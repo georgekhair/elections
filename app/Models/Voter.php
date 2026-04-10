@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
 use App\Services\UserHierarchyService;
+use App\Models\VoterContactLog;
 
 class Voter extends Model
 {
@@ -216,5 +217,10 @@ class Voter extends Model
                 });
             }
         });
+    }
+
+    public function contactLogs()
+    {
+        return $this->hasMany(VoterContactLog::class);
     }
 }

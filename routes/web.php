@@ -71,24 +71,13 @@ Route::middleware(['auth', 'role:delegate'])
         Route::post('/voters/{voter}/mark', [VoterController::class, 'markVoted'])
             ->middleware('throttle:60,1')
             ->name('delegate.voters.mark');
-        Route::get('/field/targets', [TargetController::class, 'index'])
-            ->name('field.targets');
 
         Route::get('/voters/search', [VoterController::class, 'search'])
             ->name('delegate.voters.search');
+
+        Route::get('/priority', [VoterController::class, 'priority'])
+            ->name('delegate.priority');
     });
-
-    Route::middleware(['auth', 'role:supervisor|delegate'])
-        ->prefix('field')
-        ->group(function () {
-
-            Route::get('/tasks', [TaskInboxController::class, 'index'])
-                ->name('field.tasks.inbox');
-
-        });
-
-    Route::get('/targets', [TargetController::class, 'index'])
-        ->name('field.targets');
 
 
 
@@ -98,6 +87,20 @@ Route::middleware(['auth', 'role:delegate'])
 
         return response()->json(['success'=>true]);
     });
+
+    Route::middleware(['auth', 'role:admin|supervisor|delegate'])
+        ->prefix('field')
+        ->group(function () {
+
+            Route::get('/tasks', [TaskInboxController::class, 'index'])
+                ->name('field.tasks.inbox');
+
+            Route::get('/targets', [TargetController::class, 'index'])
+                ->name('field.targets'); // ✅ موحد
+
+            Route::post('/voters/{voter}/contacted', [TargetController::class, 'markContacted'])
+                ->name('field.voters.contacted');
+        });
 
 /*
 |--------------------------------------------------------------------------
