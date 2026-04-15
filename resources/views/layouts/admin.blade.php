@@ -1,3 +1,7 @@
+@if(auth()->user()->hasAnyRole(['delegate','supervisor']))
+    @include('layouts.election')
+    @php return; @endphp
+@endif
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 
@@ -6,10 +10,11 @@
     <title>Election Operations System</title>
     <link rel="stylesheet" href="{{ asset('css/admin.css') }}">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    @yield('styles')
 </head>
 
 <body>
-
 <div class="admin-app wrapper">
 
     {{-- ================= SIDEBAR ================= --}}
@@ -93,9 +98,7 @@
         {{-- Topbar --}}
         <div class="topbar">
 
-            <div class="topbar-title">
-                Election Operations System
-            </div>
+            <h1>{{ auth()->user()->system_title }}</h1>
 
             <div class="notification-area">
                 <span class="notification-icon">🔔</span>

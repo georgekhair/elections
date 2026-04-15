@@ -22,11 +22,11 @@ class RedirectUserByRole
             }
 
             if ($user->hasRole('supervisor')) {
-                return redirect()->route('supervisor.dashboard');
+                return redirect()->route('field.election-mode');
             }
 
             if ($user->hasRole('delegate')) {
-                return redirect()->route('delegate.dashboard');
+                return redirect()->route('field.election-mode');
             }
 
             abort(403);

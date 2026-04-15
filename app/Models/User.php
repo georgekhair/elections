@@ -40,6 +40,15 @@ class User extends Authenticatable implements FilamentUser
         ];
     }
 
+    public function getSystemTitleAttribute()
+    {
+        if ($this->hasRole('delegate')) return '🟢 وضع يوم الاقتراع';
+        if ($this->hasRole('supervisor')) return '🟡 إدارة الميدان';
+        if ($this->hasRole('operations')) return '🔴 غرفة العمليات';
+        if ($this->hasRole('admin')) return '⚙️ لوحة التحكم';
+
+        return 'Election System';
+    }
     /*
     |--------------------------------------------------------------------------
     | Filament Access

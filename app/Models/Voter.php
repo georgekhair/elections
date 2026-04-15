@@ -197,23 +197,24 @@ class Voter extends Model
         // normalize Arabic
         $search = str_replace(['أ','إ','آ'], 'ا', $search);
 
-        $terms = preg_split('/\s+/', $search);
+        $terms = preg_split('/\s+/', $search, -1, PREG_SPLIT_NO_EMPTY);
 
         return $query->where(function ($q) use ($terms, $search) {
 
-            // ID search
+            // numeric search
             if (is_numeric($search)) {
                 $q->orWhere('national_id', 'like', "%{$search}%")
                 ->orWhere('voter_no', $search);
             }
 
+            // every word must exist somewhere in the full name
             foreach ($terms as $term) {
                 $q->where(function ($sub) use ($term) {
-                    $sub->where('first_name', 'like', "%{$term}%")
+                    $sub->where('full_name', 'like', "%{$term}%")
+                        ->orWhere('first_name', 'like', "%{$term}%")
                         ->orWhere('father_name', 'like', "%{$term}%")
                         ->orWhere('grandfather_name', 'like', "%{$term}%")
-                        ->orWhere('family_name', 'like', "%{$term}%")
-                        ->orWhere('full_name', 'like', "%{$term}%");
+                        ->orWhere('family_name', 'like', "%{$term}%");
                 });
             }
         });

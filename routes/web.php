@@ -35,7 +35,12 @@ use App\Http\Controllers\Admin\UserHierarchyController;
 */
 
 Route::get('/', function () {
-    return view('welcome');
+
+    if (auth()->check()) {
+        return redirect()->route('dashboard');
+    }
+
+    return view('auth.login');
 });
 
 /*
@@ -100,6 +105,15 @@ Route::middleware(['auth', 'role:delegate'])
 
             Route::post('/voters/{voter}/contacted', [TargetController::class, 'markContacted'])
                 ->name('field.voters.contacted');
+
+            Route::get('/election-mode', [TargetController::class, 'electionMode'])
+                ->name('field.election-mode');
+
+            Route::get('/election-mode/live', [TargetController::class, 'electionModeLive'])
+                ->name('field.election-mode.live');
+
+            Route::get('/election-mode/search', [TargetController::class, 'electionModeSearch'])
+                ->name('field.election-mode.search');
         });
 
 /*
