@@ -16,12 +16,47 @@ class SeatProjectionController extends Controller
         $lists = ElectionList::orderBy('id')->get();
 
         $votes = $lists->pluck('estimated_votes', 'name')->toArray();
+        $totalVotes = array_sum($votes);
 
         $projection = $service->allocate($votes, 13, 5);
+        $ourList = $lists->firstWhere('is_our_list', true);
 
+        $ourListVotes = $ourList?->estimated_votes ?? 0;
+        $ourListSeats = $projection['seats'][$ourList->name] ?? 0;
+
+        // default target (can be changed from request)
+        $targetSeats = request('target_seats', $ourListSeats + 1);
+
+        $votesNeeded = null;
+
+        if ($ourList) {
+
+            $simulatedVotes = $votes;
+
+            // 🔥 increase votes until we reach target
+            for ($i = 0; $i <= 20000; $i += 50) {
+
+                $simulatedVotes[$ourList->name] = $ourListVotes + $i;
+
+                $simProjection = $service->allocate($simulatedVotes, 13, 5);
+
+                $seats = $simProjection['seats'][$ourList->name] ?? 0;
+
+                if ($seats >= $targetSeats) {
+                    $votesNeeded = $ourListVotes + $i;
+                    break;
+                }
+            }
+        }
         return view('operations.seat-projection.index', compact(
             'lists',
-            'projection'
+            'projection',
+            'totalVotes',
+            'ourList',
+            'ourListVotes',
+            'ourListSeats',
+            'targetSeats',
+            'votesNeeded'
         ));
     }
 

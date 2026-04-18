@@ -135,6 +135,7 @@ class TargetController extends Controller
             $query->where('polling_center_id', $user->polling_center_id);
         }
 
+
         $targets = $query
             ->orderByRaw("
                 CASE

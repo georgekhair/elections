@@ -10,6 +10,9 @@ use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Role;
 use App\Models\Voter;
 use App\Services\VoterAssignmentService;
+use App\Models\UserFamilyAssignment;
+
+
 
 class UserController extends Controller
 {
@@ -153,5 +156,33 @@ class UserController extends Controller
         $user->delete();
 
         return back()->with('success', 'تم حذف المستخدم بنجاح');
+    }
+
+    public function families()
+    {
+        $users = User::all();
+
+        $families = Voter::select('family_name')
+            ->distinct()
+            ->pluck('family_name');
+
+        return view('admin.users.families', compact('users', 'families'));
+    }
+
+    public function assignFamilies(Request $request)
+    {
+        $user = User::findOrFail($request->user_id);
+
+        // حذف القديم
+        $user->familyAssignments()->delete();
+
+        foreach ($request->families as $family) {
+            $user->familyAssignments()->create([
+                'family_name' => $family,
+                'priority' => 1
+            ]);
+        }
+
+        return back()->with('success', 'تم تعيين العائلات بنجاح');
     }
 }

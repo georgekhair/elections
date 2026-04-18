@@ -173,4 +173,14 @@ class User extends Authenticatable implements FilamentUser
     {
         return $this->hasMany(FieldTask::class, 'created_by');
     }
+
+    public function familyAssignments()
+    {
+        return $this->hasMany(\App\Models\UserFamilyAssignment::class);
+    }
+
+    public function getFamiliesListAttribute()
+    {
+        return $this->familyAssignments->pluck('family_name')->toArray();
+    }
 }

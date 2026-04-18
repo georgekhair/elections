@@ -134,11 +134,28 @@
 @endif
 
             {{-- Relationships --}}
-            @if($voter->relationships_count > 0)
+            @if($voter->relationships->count())
                 <div class="insight-item">
                     <span class="icon">🔗</span>
+
                     <span>
-                        {{ $voter->relationships_count }} علاقات
+                        @foreach($voter->relationships as $rel)
+                            <span class="relation-name">
+    @if($rel->relatedVoter && $rel->relatedVoter->full_name)
+        {{ $rel->relatedVoter->full_name }}
+    @elseif(!empty($rel->related_name))
+        {{ $rel->related_name }}
+    @else
+        —
+    @endif
+</span>@if(!$loop->last)، @endif
+                        @endforeach
+
+                        @if($voter->relationships_count > 3)
+                            <span class="more-relations">
+                                +{{ $voter->relationships_count - 3 }}
+                            </span>
+                        @endif
                     </span>
                 </div>
             @endif
@@ -427,5 +444,16 @@ HOVER FIX
     color: #2563eb;
     margin-top: 2px;
     cursor: pointer;
+}
+
+.relation-name {
+    font-weight: 500;
+    color: #1f2937;
+}
+
+.more-relations {
+    color: #2563eb;
+    font-size: 12px;
+    margin-right: 4px;
 }
 </style>

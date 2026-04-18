@@ -192,23 +192,8 @@ Route::middleware(['auth', 'role:admin|operations'])
         Route::post('/tasks/{task}/progress', [FieldTaskController::class, 'markInProgress'])
             ->name('operations.tasks.progress');
 
-        Route::get('/data-preparation', [DataPreparationController::class, 'index'])
-            ->name('operations.data-preparation');
-
         Route::get('/data-validation', [DataValidationController::class, 'index'])
             ->name('operations.data-validation');
-
-        Route::get('/data-preparation/search', [DataPreparationController::class, 'search'])
-            ->name('operations.data-preparation.search');
-
-        Route::post('/data-preparation/bulk-assign', [DataPreparationController::class, 'bulkAssign'])
-            ->name('operations.data-preparation.bulk-assign');
-
-        Route::post('/data-preparation/bulk-status', [DataPreparationController::class, 'bulkStatus'])
-            ->name('operations.data-preparation.bulk-status');
-
-        Route::post('/data-preparation/{voter}', [DataPreparationController::class, 'update'])
-            ->name('operations.data-preparation.update');
 
         Route::post('/admin/voters/{voter}/notes', [VoterNoteController::class, 'store'])
             ->name('voters.notes.store');
@@ -243,6 +228,26 @@ Route::middleware(['auth', 'role:admin|operations'])
 
     });
 
+
+Route::middleware(['auth', 'role:admin|operations|data_operator'])
+    ->prefix('operations')
+    ->group(function () {
+
+        Route::get('/data-preparation', [DataPreparationController::class, 'index'])
+            ->name('operations.data-preparation');
+
+        Route::get('/data-preparation/search', [DataPreparationController::class, 'search'])
+            ->name('operations.data-preparation.search');
+
+        Route::post('/data-preparation/bulk-assign', [DataPreparationController::class, 'bulkAssign'])
+            ->name('operations.data-preparation.bulk-assign');
+
+        Route::post('/data-preparation/bulk-status', [DataPreparationController::class, 'bulkStatus'])
+            ->name('operations.data-preparation.bulk-status');
+
+        Route::post('/data-preparation/{voter}', [DataPreparationController::class, 'update'])
+            ->name('operations.data-preparation.update');
+    });
 /*
 |--------------------------------------------------------------------------
 | Admin Routes
@@ -254,6 +259,11 @@ Route::middleware(['auth', 'role:admin'])
     ->prefix('admin')
     ->name('admin.')
     ->group(function () {
+        Route::get('/user-families/{user}', function ($userId) {
+            $user = \App\Models\User::findOrFail($userId);
+
+            return response()->json($user->families_list ?? []);
+        });
 
         Route::get('/dashboard', [AdminDashboardController::class, 'index'])
             ->name('dashboard');
@@ -289,6 +299,12 @@ Route::middleware(['auth', 'role:admin'])
 
         Route::post('/user-hierarchy/move', [UserHierarchyController::class, 'move'])
             ->name('user-hierarchy.move');
+
+        Route::get('/user-families', [UserController::class, 'families'])
+            ->name('user-families');
+
+        Route::post('/user-families', [UserController::class, 'assignFamilies'])
+            ->name('user-families.assign');
     });
 
 require __DIR__.'/auth.php';

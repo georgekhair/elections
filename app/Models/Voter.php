@@ -159,7 +159,7 @@ class Voter extends Model
         }
 
         // OPERATIONS → sees everything
-        if ($user->hasRole('operations')) {
+        if ($user->hasAnyRole(['operations', 'data_operator'])) {
             return $query;
         }
 
@@ -223,5 +223,16 @@ class Voter extends Model
     public function contactLogs()
     {
         return $this->hasMany(VoterContactLog::class);
+    }
+
+    public function scopeForUserFamilies($query, $user)
+    {
+        // إذا المستخدم عنده عائلات → فلتر
+        if ($user->familyAssignments()->exists()) {
+            return $query->whereIn('family_name', $user->families_list);
+        }
+
+        // إذا ما عنده → رجّع كل شيء (حالياً)
+        return $query;
     }
 }

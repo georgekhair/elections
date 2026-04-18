@@ -13,13 +13,20 @@ class DataPreparationController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Voter::visibleTo(auth()->user())
+        $user = auth()->user();
+
+        $query = Voter::visibleTo($user)
+            ->forUserFamilies($user)
             ->with([
                 'delegate',
                 'supervisor',
                 'assignedUser',
                 'pollingCenter',
-
+                'relationships' => function ($q) {
+                    $q->select('id', 'voter_id', 'related_voter_id', 'related_name')
+                        ->with(['relatedVoter:id,full_name'])
+                        ->take(3); // مهم للأداء
+                },
                 // 🔥 إضافة الملاحظات
                 'voterNotes' => function ($q) {
                     $q->latest()
@@ -71,12 +78,20 @@ class DataPreparationController extends Controller
     public function search(Request $request)
     {
         try {
-            $query = Voter::visibleTo(auth()->user())
+            $user = auth()->user();
+
+            $query = Voter::visibleTo($user)
+                ->forUserFamilies($user)
                 ->with([
                     'delegate',
                     'supervisor',
                     'assignedUser',
                     'pollingCenter',
+                    'relationships' => function ($q) {
+                        $q->select('id', 'voter_id', 'related_voter_id', 'related_name')
+                            ->with(['relatedVoter:id,full_name'])
+                            ->take(3); // مهم للأداء
+                    },
 
                     'voterNotes' => function ($q) {
                         $q->latest()
@@ -117,7 +132,15 @@ class DataPreparationController extends Controller
 
     public function update(Request $request, Voter $voter, VoterAssignmentService $assignmentService)
     {
-        if (!$voter->newQuery()->visibleTo(auth()->user())->where('id', $voter->id)->exists()) {
+        $user = auth()->user();
+
+        if (
+            !$voter->newQuery()
+                ->visibleTo($user)
+                ->forUserFamilies($user)
+                ->where('id', $voter->id)
+                ->exists()
+        ) {
             abort(403);
         }
 
@@ -173,7 +196,11 @@ class DataPreparationController extends Controller
         }
 
         if ($request->voter_ids === 'ALL') {
-            $query = Voter::query();
+            $user = auth()->user();
+
+            $query = Voter::query()
+                ->forUserFamilies($user);
+
             $this->applyBulkFilters($query, $request);
             $ids = $query->pluck('id');
         } else {
@@ -215,7 +242,10 @@ class DataPreparationController extends Controller
         if (!empty($payload)) {
             if ($request->voter_ids === 'ALL') {
 
-                $query = Voter::query();
+                $user = auth()->user();
+
+                $query = Voter::query()
+                    ->forUserFamilies($user);
 
                 // SAME filters again 🔥
                 if ($request->center_id) {
@@ -308,9 +338,31 @@ class DataPreparationController extends Controller
             $delegateFilter = (string) $request->delegate_id;
 
             if (str_starts_with($delegateFilter, 'supervisor_')) {
-                $query->where('supervisor_id', str_replace('supervisor_', '', $delegateFilter));
-            } else {
-                $query->where('assigned_delegate_id', $delegateFilter);
+
+                $supervisorId = str_replace('supervisor_', '', $delegateFilter);
+
+                // 🔥 خيار التحكم
+                $includeDelegates = $request->boolean('include_delegates');
+
+                if ($includeDelegates) {
+
+                    // ✅ المشرف + المندوبين تحته
+                    $delegateIds = User::role('delegate')
+                        ->where('supervisor_id', $supervisorId)
+                        ->pluck('id');
+
+                    $query->where(function ($q) use ($supervisorId, $delegateIds) {
+                        $q->where('supervisor_id', $supervisorId)
+                            ->orWhereIn('assigned_delegate_id', $delegateIds);
+                    });
+
+                } else {
+
+                    // ✅ فقط المشرف مباشرة
+                    $query->where('supervisor_id', $supervisorId)
+                        ->whereNull('assigned_delegate_id');
+
+                }
             }
         }
 
@@ -391,18 +443,46 @@ class DataPreparationController extends Controller
             $query->whereNull('assigned_delegate_id')
                 ->whereNull('supervisor_id')
                 ->whereNull('assigned_user_id');
-        } elseif ($request->filled('delegate_id')) {
-            $value = (string) $request->delegate_id;
+         } elseif ($request->filled('delegate_id')) {
 
-            if (str_starts_with($value, 'supervisor_')) {
-                $query->where('supervisor_id', str_replace('supervisor_', '', $value));
-            } else {
-                $query->where(function ($q) use ($value) {
-                    $q->where('assigned_delegate_id', $value)
-                        ->orWhere('assigned_user_id', $value);
+        $value = (string) $request->delegate_id;
+
+        // =========================
+        // SUPERVISOR
+        // =========================
+        if (str_starts_with($value, 'supervisor_')) {
+
+            $supervisorId = str_replace('supervisor_', '', $value);
+            $includeDelegates = $request->boolean('include_delegates');
+
+            if ($includeDelegates) {
+
+                $delegateIds = User::role('delegate')
+                    ->where('supervisor_id', $supervisorId)
+                    ->pluck('id');
+
+                $query->where(function ($q) use ($supervisorId, $delegateIds) {
+                    $q->where(function ($qq) use ($supervisorId) {
+                        $qq->where('supervisor_id', $supervisorId)
+                           ->whereNull('assigned_delegate_id');
+                    })
+                    ->orWhereIn('assigned_delegate_id', $delegateIds);
                 });
+
+            } else {
+
+                $query->where('supervisor_id', $supervisorId)
+                      ->whereNull('assigned_delegate_id');
             }
+
+        } else {
+
+            // =========================
+            // ✅ DELEGATE (FIX)
+            // =========================
+            $query->where('assigned_delegate_id', $value);
         }
+    }
 
         if ($request->boolean('target')) {
             $query->where(function ($q) {
@@ -511,7 +591,10 @@ class DataPreparationController extends Controller
 
     private function getTotals(Request $request)
     {
-        $base = Voter::query();
+        $user = auth()->user();
+
+        $base = Voter::query()
+            ->forUserFamilies($user);
 
         $this->applyFilters($base, $request, false);
 
@@ -587,8 +670,10 @@ class DataPreparationController extends Controller
         // =========================
         // QUERY
         // =========================
+        $user = auth()->user();
 
-        $voters = Voter::selectRaw("
+        $voters = Voter::forUserFamilies($user)
+            ->selectRaw("
                 id,
                 full_name,
                 national_id,

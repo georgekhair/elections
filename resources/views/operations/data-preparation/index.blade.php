@@ -101,7 +101,10 @@
         {{-- Delegates --}}
         <select name="delegate_id" onchange="liveSearch()">
             <option value="">كل المندوبين والمشرفين</option>
-
+            {{-- 🔥 NEW --}}
+            <option value="unassigned" @selected(request('delegate_id') == 'unassigned')>
+                🚫 غير موزعين
+            </option>
             <optgroup label="👥 المندوبين">
                 @foreach($delegates as $d)
                     <option value="{{ $d->id }}"
@@ -120,7 +123,10 @@
                 @endforeach
             </optgroup>
         </select>
-
+        <label>
+            <input type="checkbox" name="include_delegates" onchange="liveSearch()">
+            عرض ناخبي المندوبين التابعين للمشرف
+        </label>
         {{-- Family --}}
         <div class="family-search-wrapper">
             <input type="text"
@@ -611,13 +617,19 @@ document.addEventListener('DOMContentLoaded', function () {
             const highPriorityNotes = document.querySelector('[name="high_priority_notes"]')?.checked;
             const hasRelationships = document.querySelector('[name="has_relationships"]')?.checked;
             const hasInfluencer = document.querySelector('[name="has_influencer"]')?.checked;
+            const includeDelegates = document.querySelector('[name="include_delegates"]')?.checked;
 
+            if (includeDelegates) params.append('include_delegates', 1);
             if (name) params.append('name', name);
             if (center) params.append('center_id', center);
             if (status) params.append('status', status);
             if (priority) params.append('priority', priority);
             if (familyName) params.append('family_name', familyName);
-            if (delegateId) params.append('delegate_id', delegateId);
+            if (delegateId === 'unassigned') {
+                params.append('unassigned', 1);
+            } else if (delegateId) {
+                params.append('delegate_id', delegateId);
+            }
             if (hasNotes) params.append('has_notes', 1);
             if (needsAction) params.append('needs_action', 1);
             if (highPriorityNotes) params.append('high_priority_notes', 1);

@@ -23,4 +23,6 @@ Homestead.json
 Homestead.yaml
 Thumbs.db
 .env-prod
-Archive.zip
+*.zip
+*.rar
+*.tar
