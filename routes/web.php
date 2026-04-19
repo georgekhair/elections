@@ -305,6 +305,9 @@ Route::middleware(['auth', 'role:admin'])
 
         Route::post('/user-families', [UserController::class, 'assignFamilies'])
             ->name('user-families.assign');
+
+        Route::get('/operations/data-preparation/print-pdf', [DataPreparationController::class, 'printPdf'])
+        ->name('data-preparation.print-pdf');
     });
 
 require __DIR__.'/auth.php';

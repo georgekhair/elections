@@ -261,6 +261,16 @@
     </div>
 
 </div>
+
+<div id="totals-box" class="totals-grid">
+
+    <div class="total-card">
+        <button onclick="exportPDF()" class="btn btn-dark">
+    📄 تصدير PDF
+</button>
+    </div>
+
+</div>
 <div id="bulk-bar" class="bulk-bar hidden">
 
     <div class="bulk-left">
@@ -323,6 +333,7 @@
 
     </div>
 </div>
+
 {{-- Table --}}
 <table class="admin-table">
     <thead>
@@ -379,7 +390,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // INLINE UPDATE
     // =========================
     window.updateVoter = function(element, id, field){
-
+        if (element.disabled) return;
         const value = element.value;
         const container = element.closest('.inline-edit');
         const status = container?.querySelector('.save-status');
@@ -1049,6 +1060,46 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     }
+
+    window.exportPDF = function() {
+
+    const params = new URLSearchParams();
+
+    const name = document.getElementById('quick-search')?.value;
+    const center = document.querySelector('[name="center_id"]')?.value;
+    const status = document.querySelector('[name="status"]')?.value;
+    const priority = document.querySelector('[name="priority"]')?.value;
+    const delegateId = document.querySelector('[name="delegate_id"]')?.value;
+    const familyName = document.querySelector('[name="family_name"]')?.value;
+
+    const hasNotes = document.querySelector('[name="has_notes"]')?.checked;
+    const needsAction = document.querySelector('[name="needs_action"]')?.checked;
+    const highPriorityNotes = document.querySelector('[name="high_priority_notes"]')?.checked;
+    const hasRelationships = document.querySelector('[name="has_relationships"]')?.checked;
+    const hasInfluencer = document.querySelector('[name="has_influencer"]')?.checked;
+    const includeDelegates = document.querySelector('[name="include_delegates"]')?.checked;
+
+    if (name) params.append('name', name);
+    if (center) params.append('center_id', center);
+    if (status) params.append('status', status);
+    if (priority) params.append('priority', priority);
+    if (familyName) params.append('family_name', familyName);
+
+    if (delegateId === 'unassigned') {
+        params.append('unassigned', 1);
+    } else if (delegateId) {
+        params.append('delegate_id', delegateId);
+    }
+
+    if (hasNotes) params.append('has_notes', 1);
+    if (needsAction) params.append('needs_action', 1);
+    if (highPriorityNotes) params.append('high_priority_notes', 1);
+    if (hasRelationships) params.append('has_relationships', 1);
+    if (hasInfluencer) params.append('has_influencer', 1);
+    if (includeDelegates) params.append('include_delegates', 1);
+
+    window.open(`/admin/operations/data-preparation/print-pdf?${params.toString()}`, '_blank');
+};
 
 });
 

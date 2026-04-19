@@ -1,53 +1,77 @@
 @forelse($voters as $voter)
+
+    @php
+        $user = auth()->user();
+
+        $canEdit = true;
+
+        if ($user->hasRole('data_operator')) {
+
+            $canEdit = \App\Models\Voter::forUserFamilies($user)
+                ->where('id', $voter->id)
+                ->exists();
+        }
+    @endphp
+
     <tr class="
             status-row
             status-{{ $voter->support_status ?? 'unknown' }}
-
+            {{ !$canEdit ? 'readonly-row' : '' }}
             {{ ($voter->actionable_voter_notes_count ?? 0) > 0 ? 'has-action' : '' }}
             {{ ($voter->voter_notes_count ?? 0) > 0 ? 'has-notes' : '' }}
             {{ ($voter->relationships_count ?? 0) > 0 ? 'has-relationships' : '' }}
 
             priority-{{ $voter->priority_level ?? 'medium' }}
+
         ">
         <td>
             <input type="checkbox" class="row-checkbox" value="{{ $voter->id }}">
         </td>
 
         <td>
-            <a href="{{ route('operations.voters.show', $voter->id) }}"
+            @php
+                $user = auth()->user();
+            @endphp
+
+            @if($user->hasRole('data_operator'))
+                <span style="font-weight:600; color:#6b7280; display:inline-flex; align-items:center; gap:6px; flex-wrap:wrap; cursor:not-allowed;">
+            @else
+                <a href="{{ route('operations.voters.show', $voter->id) }}"
                 style="font-weight:600; color:#2563eb; text-decoration:none; display:inline-flex; align-items:center; gap:6px; flex-wrap:wrap;">
+            @endif
 
                 <span>{{ $voter->full_name }}</span>
 
                 @if(($voter->relationships_count ?? 0) > 0)
                     <span class="table-indicator table-indicator-influence" title="لديه تأثير">⭐</span>
                 @endif
+
                 @if(($voter->voter_notes_count ?? 0) > 0)
-                    <span class="table-indicator table-indicator-note" title="لديه ملاحظات">
-                        📝
-                    </span>
+                    <span class="table-indicator table-indicator-note" title="لديه ملاحظات">📝</span>
                 @endif
 
                 @if(($voter->actionable_voter_notes_count ?? 0) > 0)
-                    <span class="table-indicator table-indicator-action" title="لديه ملاحظات تحتاج إجراء">
-                        ⚠️
-                    </span>
+                    <span class="table-indicator table-indicator-action" title="لديه ملاحظات تحتاج إجراء">⚠️</span>
                 @endif
 
                 @if(($voter->relationships_count ?? 0) > 0)
-                    <span class="table-indicator table-indicator-relationship" title="لديه علاقات / تأثير">
-                        🔗
-                    </span>
+                    <span class="table-indicator table-indicator-relationship" title="لديه علاقات / تأثير">🔗</span>
                 @endif
 
-            </a>
+            @if($user->hasRole('data_operator'))
+                </span>
+            @else
+                </a>
+            @endif
         </td>
 
         <td>{{ $voter->pollingCenter->name ?? '-' }}</td>
 
         <td>
             <div class="inline-edit">
-                <select onchange="updateVoter(this, {{ $voter->id }}, 'support_status')">
+                <select
+                    @disabled(!$canEdit)
+                    onchange="updateVoter(this, {{ $voter->id }}, 'support_status')">
                     <option value="supporter" @selected($voter->support_status == 'supporter')>مضمون</option>
                     <option value="leaning" @selected($voter->support_status == 'leaning')>يميل</option>
                     <option value="undecided" @selected($voter->support_status == 'undecided')>متردد</option>
@@ -61,7 +85,9 @@
 
         <td>
             <div class="inline-edit">
-                <select onchange="updateVoter(this, {{ $voter->id }}, 'priority_level')">
+                <select
+                    @disabled(!$canEdit)
+                    onchange="updateVoter(this, {{ $voter->id }}, 'priority_level')">
                     <option value="high" @selected($voter->priority_level == 'high')>عالي</option>
                     <option value="medium" @selected($voter->priority_level == 'medium')>متوسط</option>
                     <option value="low" @selected($voter->priority_level == 'low')>منخفض</option>
@@ -72,7 +98,9 @@
 
         <td>
             <div class="inline-edit">
-                <select onchange="updateVoter(this, {{ $voter->id }}, 'assigned_delegate_id')">
+                <select
+                    @disabled(!$canEdit)
+                    onchange="updateVoter(this, {{ $voter->id }}, 'assigned_delegate_id')">
 
                     <option value="">—</option>
 
@@ -455,5 +483,14 @@ HOVER FIX
     color: #2563eb;
     font-size: 12px;
     margin-right: 4px;
+}
+.readonly-row {
+    opacity: 0.65;
+    background: #f9fafb;
+}
+
+.readonly-row select {
+    background: #e5e7eb;
+    cursor: not-allowed;
 }
 </style>

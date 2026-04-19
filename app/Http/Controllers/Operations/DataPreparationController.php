@@ -8,6 +8,9 @@ use App\Models\User;
 use App\Models\Voter;
 use Illuminate\Http\Request;
 use App\Services\VoterAssignmentService;
+use Barryvdh\DomPDF\Facade\Pdf;
+use ArPHP\I18N\Arabic;
+
 
 class DataPreparationController extends Controller
 {
@@ -15,30 +18,33 @@ class DataPreparationController extends Controller
     {
         $user = auth()->user();
 
-        $query = Voter::visibleTo($user)
-            ->forUserFamilies($user)
-            ->with([
-                'delegate',
-                'supervisor',
-                'assignedUser',
-                'pollingCenter',
-                'relationships' => function ($q) {
-                    $q->select('id', 'voter_id', 'related_voter_id', 'related_name')
-                        ->with(['relatedVoter:id,full_name'])
-                        ->take(3); // مهم للأداء
-                },
-                // 🔥 إضافة الملاحظات
-                'voterNotes' => function ($q) {
-                    $q->latest()
-                        ->select('id', 'voter_id', 'content', 'note_type', 'priority', 'requires_action', 'created_at')
-                        ->take(3);
-                }
-            ])
-            ->withCount([
-                'voterNotes',
-                'relationships',
-                'actionableVoterNotes',
-            ]);
+        $query = Voter::visibleTo($user);
+
+        // 🔥 التعديل هنا
+        if (!$user->hasRole('data_operator')) {
+            $query->forUserFamilies($user);
+        }
+
+        $query->with([
+            'delegate',
+            'supervisor',
+            'assignedUser',
+            'pollingCenter',
+            'relationships' => function ($q) {
+                $q->select('id', 'voter_id', 'related_voter_id', 'related_name')
+                    ->with(['relatedVoter:id,full_name'])
+                    ->take(3);
+            },
+            'voterNotes' => function ($q) {
+                $q->latest()
+                    ->select('id', 'voter_id', 'content', 'note_type', 'priority', 'requires_action', 'created_at')
+                    ->take(3);
+            }
+        ])->withCount([
+                    'voterNotes',
+                    'relationships',
+                    'actionableVoterNotes',
+                ]);
 
         $this->applyFilters($query, $request);
 
@@ -80,25 +86,31 @@ class DataPreparationController extends Controller
         try {
             $user = auth()->user();
 
-            $query = Voter::visibleTo($user)
-                ->forUserFamilies($user)
-                ->with([
-                    'delegate',
-                    'supervisor',
-                    'assignedUser',
-                    'pollingCenter',
-                    'relationships' => function ($q) {
-                        $q->select('id', 'voter_id', 'related_voter_id', 'related_name')
-                            ->with(['relatedVoter:id,full_name'])
-                            ->take(3); // مهم للأداء
-                    },
+            // ✅ الأساس
+            $query = Voter::visibleTo($user);
 
-                    'voterNotes' => function ($q) {
-                        $q->latest()
-                            ->select('id', 'voter_id', 'content', 'note_type', 'priority', 'requires_action', 'created_at')
-                            ->take(3);
-                    }
-                ])
+            // 🔥 data_operator يشوف الكل
+            if (!$user->hasRole('data_operator')) {
+                $query->forUserFamilies($user);
+            }
+
+            $query->with([
+                'delegate',
+                'supervisor',
+                'assignedUser',
+                'pollingCenter',
+                'relationships' => function ($q) {
+                    $q->select('id', 'voter_id', 'related_voter_id', 'related_name')
+                        ->with(['relatedVoter:id,full_name'])
+                        ->take(3);
+                },
+
+                'voterNotes' => function ($q) {
+                    $q->latest()
+                        ->select('id', 'voter_id', 'content', 'note_type', 'priority', 'requires_action', 'created_at')
+                        ->take(3);
+                }
+            ])
                 ->withCount([
                     'voterNotes',
                     'relationships',
@@ -112,7 +124,6 @@ class DataPreparationController extends Controller
             $voters = $query->paginate(50)->withQueryString();
 
             $delegates = User::role('delegate')->orderBy('name')->get();
-
             $supervisors = User::role('supervisor')->orderBy('name')->get();
 
             return response()->json([
@@ -134,16 +145,28 @@ class DataPreparationController extends Controller
     {
         $user = auth()->user();
 
-        if (
-            !$voter->newQuery()
-                ->visibleTo($user)
+        // 🔥 CHECK EDIT PERMISSION
+        if ($user->hasRole('data_operator')) {
+
+            $canEdit = Voter::forUserFamilies($user)
+                ->where('id', $voter->id)
+                ->exists();
+
+        } else {
+
+            $canEdit = Voter::visibleTo($user)
                 ->forUserFamilies($user)
                 ->where('id', $voter->id)
-                ->exists()
-        ) {
+                ->exists();
+        }
+
+        if (!$canEdit) {
             abort(403);
         }
 
+        // =========================
+        // VALIDATION
+        // =========================
         $request->validate([
             'support_status' => 'nullable|in:supporter,leaning,undecided,opposed,unknown,traveling',
             'priority_level' => 'nullable|in:high,medium,low',
@@ -195,18 +218,40 @@ class DataPreparationController extends Controller
             return back()->withErrors(['يجب اختيار مندوب أو مشرف']);
         }
 
-        if ($request->voter_ids === 'ALL') {
-            $user = auth()->user();
+        $user = auth()->user();
 
-            $query = Voter::query()
-                ->forUserFamilies($user);
+        // =========================
+        // GET IDS
+        // =========================
+        if ($request->voter_ids === 'ALL') {
+
+            $query = Voter::query();
+
+            // 🔥 مهم: نفس منطق الرؤية
+            if (!$user->hasRole('data_operator')) {
+                $query->forUserFamilies($user);
+            }
 
             $this->applyBulkFilters($query, $request);
+
             $ids = $query->pluck('id');
+
         } else {
-            $ids = $request->voter_ids;
+
+            $ids = collect($request->voter_ids);
+
+            // 🔥 فلترة أمان
+            if (!$user->hasRole('data_operator')) {
+                $ids = Voter::query()
+                    ->forUserFamilies($user)
+                    ->whereIn('id', $ids)
+                    ->pluck('id');
+            }
         }
 
+        // =========================
+        // SELECTION VALUE
+        // =========================
         $selectionValue = '';
 
         if ($request->filled('supervisor_id')) {
@@ -223,11 +268,12 @@ class DataPreparationController extends Controller
     public function bulkStatus(Request $request)
     {
         $request->validate([
-            'voter_ids' => 'required|array|min:1',
-            'voter_ids.*' => 'exists:voters,id',
+            'voter_ids' => 'required',
             'support_status' => 'nullable|in:supporter,leaning,undecided,opposed,unknown,traveling',
             'priority_level' => 'nullable|in:high,medium,low',
         ]);
+
+        $user = auth()->user();
 
         $payload = [];
 
@@ -239,79 +285,95 @@ class DataPreparationController extends Controller
             $payload['priority_level'] = $request->priority_level;
         }
 
-        if (!empty($payload)) {
-            if ($request->voter_ids === 'ALL') {
+        if (empty($payload)) {
+            return back();
+        }
 
-                $user = auth()->user();
+        // =========================
+        // GET IDS
+        // =========================
+        if ($request->voter_ids === 'ALL') {
 
-                $query = Voter::query()
-                    ->forUserFamilies($user);
+            $query = Voter::query();
 
-                // SAME filters again 🔥
-                if ($request->center_id) {
-                    $query->where('polling_center_id', $request->center_id);
-                }
-
-                if ($request->status) {
-                    $query->where('support_status', $request->status);
-                }
-
-                if ($request->priority) {
-                    $query->where('priority_level', $request->priority);
-                }
-
-                // ✅ FAMILY FILTER (NEW)
-                if ($request->family_name) {
-                    $query->where('family_name', $request->family_name);
-                }
-
-                if ($request->delegate_id) {
-                    $delegateFilter = (string) $request->delegate_id;
-
-                    if (str_starts_with($delegateFilter, 'supervisor_')) {
-                        $query->where('supervisor_id', str_replace('supervisor_', '', $delegateFilter));
-                    } else {
-                        $query->where('assigned_delegate_id', $delegateFilter);
-                    }
-                }
-
-                if ($request->unassigned) {
-                    $query->whereNull('assigned_delegate_id');
-                }
-
-                if ($request->target) {
-                    $query->where(function ($q) {
-                        $q->whereIn('support_status', ['leaning', 'undecided'])
-                            ->orWhere(function ($qq) {
-                                $qq->where('support_status', 'supporter')
-                                    ->where('priority_level', 'high');
-                            });
-                    });
-                }
-
-                if ($request->name) {
-                    $words = array_filter(explode(' ', trim($request->name)));
-
-                    $query->where(function ($q) use ($words) {
-                        foreach ($words as $word) {
-                            $q->where(function ($qq) use ($word) {
-                                $qq->where('full_name', 'like', "%$word%")
-                                    ->orWhere('national_id', 'like', "%$word%");
-                            });
-                        }
-                    });
-                }
-
-                $ids = $query->pluck('id');
-
-            } else {
-                $ids = $request->voter_ids;
+            // 🔥 نفس منطق الصلاحيات
+            if (!$user->hasRole('data_operator')) {
+                $query->forUserFamilies($user);
             }
 
-            if (!empty($payload)) {
-                Voter::whereIn('id', $ids)->update($payload);
+            // نفس الفلاتر
+            if ($request->center_id) {
+                $query->where('polling_center_id', $request->center_id);
+            }
+
+            if ($request->status) {
+                $query->where('support_status', $request->status);
+            }
+
+            if ($request->priority) {
+                $query->where('priority_level', $request->priority);
+            }
+
+            if ($request->family_name) {
+                $query->where('family_name', $request->family_name);
+            }
+
+            if ($request->delegate_id) {
+                $delegateFilter = (string) $request->delegate_id;
+
+                if (str_starts_with($delegateFilter, 'supervisor_')) {
+                    $query->where('supervisor_id', str_replace('supervisor_', '', $delegateFilter));
+                } else {
+                    $query->where('assigned_delegate_id', $delegateFilter);
+                }
+            }
+
+            if ($request->unassigned) {
+                $query->whereNull('assigned_delegate_id');
+            }
+
+            if ($request->target) {
+                $query->where(function ($q) {
+                    $q->whereIn('support_status', ['leaning', 'undecided'])
+                        ->orWhere(function ($qq) {
+                            $qq->where('support_status', 'supporter')
+                                ->where('priority_level', 'high');
+                        });
+                });
+            }
+
+            if ($request->name) {
+                $words = array_filter(explode(' ', trim($request->name)));
+
+                $query->where(function ($q) use ($words) {
+                    foreach ($words as $word) {
+                        $q->where(function ($qq) use ($word) {
+                            $qq->where('full_name', 'like', "%$word%")
+                                ->orWhere('national_id', 'like', "%$word%");
+                        });
+                    }
+                });
+            }
+
+            $ids = $query->pluck('id');
+
+        } else {
+
+            $ids = collect($request->voter_ids);
+
+            // 🔥 حماية
+            if (!$user->hasRole('data_operator')) {
+                $ids = Voter::query()
+                    ->forUserFamilies($user)
+                    ->whereIn('id', $ids)
+                    ->pluck('id');
             }
         }
+
+        // =========================
+        // UPDATE
+        // =========================
+        Voter::whereIn('id', $ids)->update($payload);
 
         return back()->with('success', 'تم تحديث الناخبين المحددين بنجاح');
     }
@@ -443,46 +505,46 @@ class DataPreparationController extends Controller
             $query->whereNull('assigned_delegate_id')
                 ->whereNull('supervisor_id')
                 ->whereNull('assigned_user_id');
-         } elseif ($request->filled('delegate_id')) {
+        } elseif ($request->filled('delegate_id')) {
 
-        $value = (string) $request->delegate_id;
+            $value = (string) $request->delegate_id;
 
-        // =========================
-        // SUPERVISOR
-        // =========================
-        if (str_starts_with($value, 'supervisor_')) {
+            // =========================
+            // SUPERVISOR
+            // =========================
+            if (str_starts_with($value, 'supervisor_')) {
 
-            $supervisorId = str_replace('supervisor_', '', $value);
-            $includeDelegates = $request->boolean('include_delegates');
+                $supervisorId = str_replace('supervisor_', '', $value);
+                $includeDelegates = $request->boolean('include_delegates');
 
-            if ($includeDelegates) {
+                if ($includeDelegates) {
 
-                $delegateIds = User::role('delegate')
-                    ->where('supervisor_id', $supervisorId)
-                    ->pluck('id');
+                    $delegateIds = User::role('delegate')
+                        ->where('supervisor_id', $supervisorId)
+                        ->pluck('id');
 
-                $query->where(function ($q) use ($supervisorId, $delegateIds) {
-                    $q->where(function ($qq) use ($supervisorId) {
-                        $qq->where('supervisor_id', $supervisorId)
-                           ->whereNull('assigned_delegate_id');
-                    })
-                    ->orWhereIn('assigned_delegate_id', $delegateIds);
-                });
+                    $query->where(function ($q) use ($supervisorId, $delegateIds) {
+                        $q->where(function ($qq) use ($supervisorId) {
+                            $qq->where('supervisor_id', $supervisorId)
+                                ->whereNull('assigned_delegate_id');
+                        })
+                            ->orWhereIn('assigned_delegate_id', $delegateIds);
+                    });
+
+                } else {
+
+                    $query->where('supervisor_id', $supervisorId)
+                        ->whereNull('assigned_delegate_id');
+                }
 
             } else {
 
-                $query->where('supervisor_id', $supervisorId)
-                      ->whereNull('assigned_delegate_id');
+                // =========================
+                // ✅ DELEGATE (FIX)
+                // =========================
+                $query->where('assigned_delegate_id', $value);
             }
-
-        } else {
-
-            // =========================
-            // ✅ DELEGATE (FIX)
-            // =========================
-            $query->where('assigned_delegate_id', $value);
         }
-    }
 
         if ($request->boolean('target')) {
             $query->where(function ($q) {
@@ -593,8 +655,13 @@ class DataPreparationController extends Controller
     {
         $user = auth()->user();
 
-        $base = Voter::query()
-            ->forUserFamilies($user);
+        // ✅ الأساس
+        $base = Voter::query();
+
+        // 🔥 data_operator يشوف الكل
+        if (!$user->hasRole('data_operator')) {
+            $base->forUserFamilies($user);
+        }
 
         $this->applyFilters($base, $request, false);
 
@@ -735,5 +802,88 @@ class DataPreparationController extends Controller
                     ];
                 })
         );
+    }
+
+    public function printPdf(Request $request)
+    {
+        $user = auth()->user();
+
+        // ✅ 1. نجيب البيانات أولاً
+        $query = Voter::visibleTo($user)
+            ->forUserFamilies($user)
+            ->with([
+                'pollingCenter',
+                'delegate',
+                'supervisor',
+                'voterNotes' => function ($q) {
+                    $q->latest()->take(2); // 🔥 أهم 2 ملاحظات فقط (مهم للأداء)
+                }
+            ]);
+
+        // نفس الفلاتر
+        $this->applyFilters($query, $request, false);
+
+        $voters = $query->get(); // 🔥 هذا كان ناقصك
+
+        $totals = $this->getTotals($request);
+
+        // ✅ 2. Arabic reshaping
+        $arabic = new Arabic();
+
+        $voters->transform(function ($v) use ($arabic) {
+
+            $v->full_name = $arabic->utf8Glyphs($v->full_name);
+
+            $v->support_status = $arabic->utf8Glyphs(
+                $this->translateStatus($v->support_status)
+            );
+
+            $v->polling_center_name = $arabic->utf8Glyphs(
+                $v->pollingCenter->name ?? '-'
+            );
+
+            $name = $v->delegate->name
+                ?? $v->supervisor->name
+                ?? '-';
+
+            $v->delegate_name = $arabic->utf8Glyphs($name);
+
+            $v->notes = $v->voterNotes->map(function ($note) use ($arabic) {
+
+                $text = $note->content;
+
+                // 🔥 optional: تضيف أيقونة حسب النوع
+                if ($note->requires_action) {
+                    $text = 'اجراء: ' . $text;
+                } elseif ($note->priority === 'high') {
+                    $text = 'عالي: ' . $text;
+                }
+
+                return $arabic->utf8Glyphs($text);
+
+            })->toArray();
+
+            return $v;
+        });
+
+        // ✅ 3. PDF
+        $pdf = Pdf::loadView('operations.data-preparation.pdf', [
+            'voters' => $voters,
+            'totals' => $totals,
+            'filters' => $request->all()
+        ])->setPaper('a4', 'portrait');
+
+        return $pdf->download('voters-report.pdf');
+    }
+    private function translateStatus($status)
+    {
+        return match ($status) {
+            'supporter' => 'مضمون',
+            'leaning' => 'يميل',
+            'undecided' => 'متردد',
+            'opposed' => 'ضد',
+            'traveling' => 'مسافر',
+            default => 'غير معروف',
+        };
     }
 }
