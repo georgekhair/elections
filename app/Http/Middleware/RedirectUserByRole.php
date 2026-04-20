@@ -12,7 +12,9 @@ class RedirectUserByRole
     {
         if (auth()->check() && $request->routeIs('dashboard')) {
             $user = auth()->user();
-
+            if ($user->hasRole('data_operator')) {
+                return redirect('/operations/data-preparation');
+            }
             if ($user->hasRole('admin')) {
                 return redirect()->route('admin.dashboard');
             }

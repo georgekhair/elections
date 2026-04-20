@@ -147,35 +147,38 @@
 
         <div class="filter-title">🔎 فلاتر متقدمة</div>
 
-        <label>
-            <input type="checkbox" name="has_notes" onchange="liveSearch()"
+
+            <div class="filter-item">
+                <div class="filter-label"> 📝 لديه ملاحظات</div>
+                <input type="checkbox" name="has_notes" onchange="liveSearch()"
                 @checked(request('has_notes'))>
-            📝 لديه ملاحظات
-        </label>
+            </div>
 
-        <label>
-            <input type="checkbox" name="needs_action" onchange="liveSearch()"
+            <div class="filter-item">
+                <div class="filter-label">🚨 يحتاج إجراء</div>
+                <input type="checkbox" name="needs_action" onchange="liveSearch()"
                 @checked(request('needs_action'))>
-            🚨 يحتاج إجراء
-        </label>
+            </div>
 
-        <label>
-            <input type="checkbox" name="high_priority_notes" onchange="liveSearch()"
+            <div class="filter-item">
+                <div class="filter-label">🔥 ملاحظات عالية</div>
+                <input type="checkbox" name="high_priority_notes" onchange="liveSearch()"
                 @checked(request('high_priority_notes'))>
-            🔥 ملاحظات عالية
-        </label>
+            </div>
 
-        <label>
-            <input type="checkbox" name="has_relationships" onchange="liveSearch()"
+            <div class="filter-item">
+                <div class="filter-label">🔗 لديه علاقات</div>
+                <input type="checkbox" name="has_relationships" onchange="liveSearch()"
                 @checked(request('has_relationships'))>
-            🔗 لديه علاقات
-        </label>
+            </div>
 
-        <label>
-            <input type="checkbox" name="has_influencer" onchange="liveSearch()"
+            <div class="filter-item">
+                <div class="filter-label">⭐ مؤثر أساسي</div>
+                <input type="checkbox" name="has_influencer" onchange="liveSearch()"
                 @checked(request('has_influencer'))>
-            ⭐ مؤثر أساسي
-        </label>
+            </div>
+
+
 
     </div>
 
@@ -263,12 +266,14 @@
 </div>
 
 <div id="totals-box" class="totals-grid">
-
+@role('admin|operations')
     <div class="total-card">
         <button onclick="exportPDF()" class="btn btn-dark">
     📄 تصدير PDF
 </button>
     </div>
+@endrole
+
 
 </div>
 <div id="bulk-bar" class="bulk-bar hidden">

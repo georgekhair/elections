@@ -36,6 +36,7 @@
             font-weight: bold;
         }
     </style>
+
 </head>
 
 <body>
@@ -209,20 +210,26 @@
     <div class="content">
 
         <div class="topbar">
+    <div class="topbar-row topbar-row-main">
+        <button id="menu-toggle" class="menu-btn" type="button">☰</button>
 
-            <h1>{{ auth()->user()->system_title }}</h1>
+        <div class="topbar-system-title">
+            {{ auth()->user()->system_title }}
+        </div>
+    </div>
 
-            <div class="notification-area">
-                <span class="notification-icon">🔔</span>
-                <span id="task-badge" class="notification-badge" style="display:none;">0</span>
-            </div>
-
-            <div class="user-info">
-                {{ auth()->user()->name }}
-                <small>({{ auth()->user()->getRoleNames()->first() }})</small>
-            </div>
+    <div class="topbar-row topbar-row-meta">
+        <div class="user-info">
+            <div>{{ auth()->user()->name }} ({{ auth()->user()->getRoleNames()->first() }})</div>
 
         </div>
+
+        <div class="notification-area">
+            <span class="notification-icon">🔔</span>
+            <span id="task-badge" class="notification-badge" style="display:none;">0</span>
+        </div>
+    </div>
+</div>
 
         <div class="main">
             @yield('content')
@@ -233,6 +240,24 @@
 </div>
 
 @yield('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function(){
 
+    document.getElementById('menu-toggle')?.addEventListener('click', function(){
+        document.querySelector('.sidebar').classList.toggle('open');
+    });
+
+    document.addEventListener('click', function(e){
+        const sidebar = document.querySelector('.sidebar');
+
+        if (!sidebar) return;
+
+        if (!sidebar.contains(e.target) && !e.target.closest('#menu-toggle')) {
+            sidebar.classList.remove('open');
+        }
+    });
+
+});
+</script>
 </body>
 </html>

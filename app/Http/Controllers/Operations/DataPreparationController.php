@@ -10,7 +10,7 @@ use Illuminate\Http\Request;
 use App\Services\VoterAssignmentService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use ArPHP\I18N\Arabic;
-
+use App\Helpers\RoleHelper;
 
 class DataPreparationController extends Controller
 {
@@ -21,7 +21,7 @@ class DataPreparationController extends Controller
         $query = Voter::visibleTo($user);
 
         // 🔥 التعديل هنا
-        if (!$user->hasRole('data_operator')) {
+        if (RoleHelper::restrictToFamilies($user)) {
             $query->forUserFamilies($user);
         }
 
@@ -52,6 +52,14 @@ class DataPreparationController extends Controller
 
         $voters = $query->paginate(50)->withQueryString();
 
+        $editableIds = [];
+
+        if (RoleHelper::restrictToFamilies($user)) {
+            $editableIds = Voter::forUserFamilies($user)->pluck('id')->toArray();
+        } else {
+            $editableIds = $voters->pluck('id')->toArray();
+        }
+
         $centers = PollingCenter::orderBy('name')->get();
         $delegates = User::role('delegate')->orderBy('name')->get();
         $supervisors = User::role('supervisor')->orderBy('name')->get();
@@ -77,7 +85,8 @@ class DataPreparationController extends Controller
             'delegates',
             'supervisors',
             'totals',
-            'families'
+            'families',
+            'editableIds'
         ));
     }
 
@@ -90,7 +99,7 @@ class DataPreparationController extends Controller
             $query = Voter::visibleTo($user);
 
             // 🔥 data_operator يشوف الكل
-            if (!$user->hasRole('data_operator')) {
+            if (RoleHelper::restrictToFamilies($user)) {
                 $query->forUserFamilies($user);
             }
 
@@ -146,7 +155,7 @@ class DataPreparationController extends Controller
         $user = auth()->user();
 
         // 🔥 CHECK EDIT PERMISSION
-        if ($user->hasRole('data_operator')) {
+        if (RoleHelper::restrictToFamilies($user)) {
 
             $canEdit = Voter::forUserFamilies($user)
                 ->where('id', $voter->id)
@@ -228,7 +237,7 @@ class DataPreparationController extends Controller
             $query = Voter::query();
 
             // 🔥 مهم: نفس منطق الرؤية
-            if (!$user->hasRole('data_operator')) {
+            if (RoleHelper::restrictToFamilies($user)) {
                 $query->forUserFamilies($user);
             }
 
@@ -241,7 +250,7 @@ class DataPreparationController extends Controller
             $ids = collect($request->voter_ids);
 
             // 🔥 فلترة أمان
-            if (!$user->hasRole('data_operator')) {
+            if (RoleHelper::restrictToFamilies($user)) {
                 $ids = Voter::query()
                     ->forUserFamilies($user)
                     ->whereIn('id', $ids)
@@ -297,7 +306,7 @@ class DataPreparationController extends Controller
             $query = Voter::query();
 
             // 🔥 نفس منطق الصلاحيات
-            if (!$user->hasRole('data_operator')) {
+            if (RoleHelper::restrictToFamilies($user)) {
                 $query->forUserFamilies($user);
             }
 
@@ -362,7 +371,7 @@ class DataPreparationController extends Controller
             $ids = collect($request->voter_ids);
 
             // 🔥 حماية
-            if (!$user->hasRole('data_operator')) {
+            if (RoleHelper::restrictToFamilies($user)) {
                 $ids = Voter::query()
                     ->forUserFamilies($user)
                     ->whereIn('id', $ids)
@@ -659,7 +668,7 @@ class DataPreparationController extends Controller
         $base = Voter::query();
 
         // 🔥 data_operator يشوف الكل
-        if (!$user->hasRole('data_operator')) {
+        if (RoleHelper::restrictToFamilies($user)) {
             $base->forUserFamilies($user);
         }
 
