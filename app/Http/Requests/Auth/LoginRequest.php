@@ -81,12 +81,24 @@ class LoginRequest extends FormRequest
             ]);
         } else {
             // reject if trying from another device
-            if ($user->device_fingerprint !== $incomingFingerprint) {
-                Auth::logout();
+            if (config('security.single_device_login')) {
 
-                throw ValidationException::withMessages([
-                    'email' => 'هذا الحساب مسموح له بجهاز واحد فقط. يرجى مراجعة الإدارة إذا تم تغيير الهاتف.',
-                ]);
+                if ($user->device_fingerprint !== $incomingFingerprint) {
+
+                    // 🔥 خيار 1: رفض
+                    if (!config('security.allow_device_reset')) {
+                        Auth::logout();
+
+                        throw ValidationException::withMessages([
+                            'email' => 'هذا الحساب مسموح له بجهاز واحد فقط.',
+                        ]);
+                    }
+
+                    // 🔥 خيار 2: تحديث الجهاز
+                    $user->update([
+                        'device_fingerprint' => $incomingFingerprint,
+                    ]);
+                }
             }
 
             $user->update([
